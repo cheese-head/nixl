@@ -25,8 +25,11 @@
 #include <cassert>
 #include "stream/metadata_stream.h"
 #include "serdes/serdes.h"
+#include <mutex>
+#include <vector>
 
-#define NUM_TRANSFERS 1
+#define NUM_TRANSFERS 2
+#define NUM_THREADS 4
 #define SIZE 1024
 #define MEM_VAL 0xBB
 
@@ -36,6 +39,11 @@
  * desc list needs to move from
  * target to initiator
  */
+
+struct SharedNotificationState {
+    std::mutex mtx;
+    std::vector<nixlSerDes> remote_serdes;
+};
 
 static const std::string target("target");
 static const std::string initiator("initiator");
@@ -61,41 +69,29 @@ static std::vector<std::unique_ptr<uint8_t[]>> initMem(nixlAgent &agent,
     return addrs;
 }
 
-static void runTarget(const std::string &ip, int port) {
-    nixlAgentConfig cfg(true, true, port);
-
-    std::cout << "Starting Agent for target\n";
-    nixlAgent     agent(target, cfg);
-
-    nixl_b_params_t params;
-    nixlBackendH    *ucx;
-    agent.createBackend("UCX", params, ucx);
-
-    nixl_opt_args_t extra_params;
-    extra_params.backends.push_back(ucx);
-
+static void targetThread(nixlAgent &agent, nixl_opt_args_t *extra_params, int thread_id) {
     nixl_reg_dlist_t dram_for_ucx(DRAM_SEG);
-    auto addrs = initMem(agent, dram_for_ucx, &extra_params, 0);
+    auto addrs = initMem(agent, dram_for_ucx, extra_params, 0);
 
     nixl_blob_t tgt_metadata;
     agent.getLocalMD(tgt_metadata);
 
-    std::cout << " Start Control Path metadata exchanges \n";
+    std::cout << "Thread " << thread_id << " Start Control Path metadata exchanges\n";
 
-    std::cout << " Desc List from Target to Initiator\n";
+    std::cout << "Thread " << thread_id << " Desc List from Target to Initiator\n";
     dram_for_ucx.print();
 
     /** Only send desc list */
     nixlSerDes serdes;
     assert(dram_for_ucx.trim().serialize(&serdes) == NIXL_SUCCESS);
 
-    std::cout << " Wait for initiator and then send xfer descs\n";
+    std::cout << "Thread " << thread_id << " Wait for initiator and then send xfer descs\n";
     std::string message = serdes.exportStr();
-    while (agent.genNotif(initiator, message, &extra_params) != NIXL_SUCCESS);
-    std::cout << " End Control Path metadata exchanges \n";
+    while (agent.genNotif(initiator, message, extra_params) != NIXL_SUCCESS);
+    std::cout << "Thread " << thread_id << " End Control Path metadata exchanges\n";
 
-    std::cout << " Start Data Path Exchanges \n";
-    std::cout << " Waiting to receive Data from Initiator\n";
+    std::cout << "Thread " << thread_id << " Start Data Path Exchanges\n";
+    std::cout << "Thread " << thread_id << " Waiting to receive Data from Initiator\n";
 
     bool rc = false;
     for (int n_tries = 0; !rc && n_tries < 100; n_tries++) {
@@ -110,33 +106,23 @@ static void runTarget(const std::string &ip, int port) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     if (!rc)
-        std::cerr << " UCX Transfer failed, buffers are different\n";
+        std::cerr << "Thread " << thread_id << " UCX Transfer failed, buffers are different\n";
     else
-        std::cout << " Transfer completed and Buffers match with Initiator\n"
-                  <<"  UCX Transfer Success!!!\n";
+        std::cout << "Thread " << thread_id << " Transfer completed and Buffers match with Initiator\n"
+                  << "Thread " << thread_id << " UCX Transfer Success!!!\n";
 
-    std::cout <<"Cleanup.. \n";
-    agent.deregisterMem(dram_for_ucx, &extra_params);
+    std::cout << "Thread " << thread_id << " Cleanup..\n";
+    agent.deregisterMem(dram_for_ucx, extra_params);
 }
 
-static void runInitiator(const std::string &target_ip, int target_port) {
-    nixlAgentConfig cfg(true, true);
-
-    std::cout << "Starting Agent for initiator\n";
-    nixlAgent     agent(initiator, cfg);
-
-    nixl_b_params_t params;
-    nixlBackendH    *ucx;
-    agent.createBackend("UCX", params, ucx);
-
-    nixl_opt_args_t extra_params;
-    extra_params.backends.push_back(ucx);
-
+static void initiatorThread(nixlAgent &agent, nixl_opt_args_t *extra_params,
+                          const std::string &target_ip, int target_port, int thread_id,
+                          SharedNotificationState &shared_state) {
     nixl_reg_dlist_t dram_for_ucx(DRAM_SEG);
-    auto addrs = initMem(agent, dram_for_ucx, &extra_params, MEM_VAL);
+    auto addrs = initMem(agent, dram_for_ucx, extra_params, MEM_VAL);
 
-    std::cout << " Start Control Path metadata exchanges \n";
-    std::cout << " Exchange metadata with Target \n";
+    std::cout << "Thread " << thread_id << " Start Control Path metadata exchanges\n";
+    std::cout << "Thread " << thread_id << " Exchange metadata with Target\n";
 
     nixl_opt_args_t md_extra_params;
     md_extra_params.ipAddr = target_ip;
@@ -146,25 +132,44 @@ static void runInitiator(const std::string &target_ip, int target_port) {
 
     agent.sendLocalMD(&md_extra_params);
 
-    nixl_notifs_t notifs;
-    while(notifs.size() == 0) {
-        nixl_status_t ret = agent.getNotifs(notifs, &extra_params);
+    // Wait for notifications and populate shared state
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock(shared_state.mtx);
+            if (shared_state.remote_serdes.size() >= NUM_THREADS) {
+                break;
+            }
+        }
+
+        nixl_notifs_t notifs;
+        nixl_status_t ret = agent.getNotifs(notifs, extra_params);
         assert(ret >= 0);
+
+        if (notifs.size() > 0) {
+            std::lock_guard<std::mutex> lock(shared_state.mtx);
+            for (const auto &notif : notifs[target]) {
+                nixlSerDes serdes;
+                serdes.importStr(notif);
+                shared_state.remote_serdes.push_back(serdes);
+            }
+        }
     }
-    std::string rrstr = notifs[target][0];
-    assert(rrstr.size() > 0);
 
+    // Get our thread's serdes instance
     nixlSerDes remote_serdes;
-    remote_serdes.importStr(rrstr);
+    {
+        std::lock_guard<std::mutex> lock(shared_state.mtx);
+        remote_serdes = shared_state.remote_serdes[thread_id];
+    }
 
-    std::cout << " Verify Deserialized Target's Desc List at Initiator\n";
+    std::cout << "Thread " << thread_id << " Verify Deserialized Target's Desc List at Initiator\n";
     nixl_xfer_dlist_t dram_target_ucx(&remote_serdes);
     nixl_xfer_dlist_t dram_initiator_ucx = dram_for_ucx.trim();
     dram_target_ucx.print();
 
-    std::cout << " End Control Path metadata exchanges \n";
-    std::cout << " Start Data Path Exchanges \n\n";
-    std::cout << " Create transfer request with UCX backend\n ";
+    std::cout << "Thread " << thread_id << " End Control Path metadata exchanges\n";
+    std::cout << "Thread " << thread_id << " Start Data Path Exchanges\n\n";
+    std::cout << "Thread " << thread_id << " Create transfer request with UCX backend\n";
 
     // Need to do this in a loop with NIXL_ERR_NOT_FOUND
     // UCX AM with desc list is faster than listener thread can recv/load MD with sockets
@@ -173,29 +178,74 @@ static void runInitiator(const std::string &target_ip, int target_port) {
     nixl_status_t ret = NIXL_SUCCESS;
     do {
         ret = agent.createXferReq(NIXL_WRITE, dram_initiator_ucx, dram_target_ucx,
-                                  target, treq, &extra_params);
+                                  target, treq, extra_params);
     } while (ret == NIXL_ERR_NOT_FOUND);
 
     if (ret != NIXL_SUCCESS) {
-        std::cerr << "Error creating transfer request " << ret <<"\n";
+        std::cerr << "Thread " << thread_id << " Error creating transfer request " << ret << "\n";
         exit(-1);
     }
 
-    std::cout << " Post the request with UCX backend\n ";
+    std::cout << "Thread " << thread_id << " Post the request with UCX backend\n";
     ret = agent.postXferReq(treq);
-    std::cout << " Initiator posted Data Path transfer\n";
-    std::cout << " Waiting for completion\n";
+    std::cout << "Thread " << thread_id << " Initiator posted Data Path transfer\n";
+    std::cout << "Thread " << thread_id << " Waiting for completion\n";
 
     while (ret != NIXL_SUCCESS) {
         ret = agent.getXferStatus(treq);
         assert(ret >= 0);
     }
-    std::cout << " Completed Sending Data using UCX backend\n";
+    std::cout << "Thread " << thread_id << " Completed Sending Data using UCX backend\n";
     agent.releaseXferReq(treq);
     agent.invalidateLocalMD(&md_extra_params);
 
-    std::cout <<"Cleanup.. \n";
-    agent.deregisterMem(dram_for_ucx, &extra_params);
+    std::cout << "Thread " << thread_id << " Cleanup..\n";
+    agent.deregisterMem(dram_for_ucx, extra_params);
+}
+
+static void runTarget(const std::string &ip, int port) {
+    nixlAgentConfig cfg(true, true, port, 0, 100000, nixl_thread_sync_t::NIXL_THREAD_SYNC_STRICT);
+
+    std::cout << "Starting Agent for target\n";
+    nixlAgent agent(target, cfg);
+
+    nixl_b_params_t params;
+    nixlBackendH *ucx;
+    agent.createBackend("UCX", params, ucx);
+
+    nixl_opt_args_t extra_params;
+    extra_params.backends.push_back(ucx);
+
+    std::vector<std::thread> threads;
+    for (int i = 0; i < NUM_THREADS; i++)
+        threads.emplace_back(targetThread, std::ref(agent), &extra_params, i);
+
+    for (auto &thread : threads)
+        thread.join();
+}
+
+static void runInitiator(const std::string &target_ip, int target_port) {
+    nixlAgentConfig cfg(true, true, 0, 0, 100000, nixl_thread_sync_t::NIXL_THREAD_SYNC_STRICT);
+
+    std::cout << "Starting Agent for initiator\n";
+    nixlAgent agent(initiator, cfg);
+
+    nixl_b_params_t params;
+    nixlBackendH *ucx;
+    agent.createBackend("UCX", params, ucx);
+
+    nixl_opt_args_t extra_params;
+    extra_params.backends.push_back(ucx);
+
+    SharedNotificationState shared_state;
+
+    std::vector<std::thread> threads;
+    for (int i = 0; i < NUM_THREADS; i++)
+        threads.emplace_back(initiatorThread, std::ref(agent), &extra_params,
+                             target_ip, target_port, i, std::ref(shared_state));
+
+    for (auto &thread : threads)
+        thread.join();
 }
 
 int main(int argc, char *argv[]) {
