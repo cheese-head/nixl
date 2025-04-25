@@ -1452,12 +1452,6 @@ pub trait NixlDescriptor: MemoryRegion {
 
     /// Get the device ID for this memory region
     fn device_id(&self) -> u64;
-
-    /// Is registered
-    fn is_registered(&self) -> bool;
-
-    /// Registration Handle
-    fn handle(&self) -> Option<&RegistrationHandle>;
 }
 
 /// A trait for types that can be registered with NIXL
@@ -1509,14 +1503,6 @@ impl NixlDescriptor for SystemStorage {
 
     fn device_id(&self) -> u64 {
         0
-    }
-
-    fn is_registered(&self) -> bool {
-        self.handle.is_some()
-    }
-
-    fn handle(&self) -> Option<&RegistrationHandle> {
-        self.handle.as_ref()
     }
 }
 

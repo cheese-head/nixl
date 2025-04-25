@@ -219,21 +219,8 @@ mod tests {
         let agent = Agent::new("test_agent").unwrap();
         let mut storage = SystemStorage::new(1024).unwrap();
 
-        // Test initial state
-        assert!(!storage.is_registered());
-        assert!(storage.handle().is_none());
-
         // Register memory
         storage.register(&agent, None).unwrap();
-
-        // Verify registration
-        assert!(storage.is_registered());
-        assert!(storage.handle().is_some());
-
-        let handle = storage.handle().unwrap();
-        assert_eq!(handle.size, 1024);
-        assert_eq!(handle.mem_type, MemType::Dram);
-        assert_eq!(handle.dev_id, 0);
 
         // Verify we can still access the memory
         storage.memset(0xAA);
@@ -247,7 +234,6 @@ mod tests {
 
         // Register memory
         storage.register(&agent, None).unwrap();
-        assert!(storage.is_registered());
 
         // Drop the storage, which should trigger deregistration
         drop(storage);
@@ -255,7 +241,6 @@ mod tests {
         // Create new storage to verify we can register again
         let mut new_storage = SystemStorage::new(1024).unwrap();
         new_storage.register(&agent, None).unwrap();
-        assert!(new_storage.is_registered());
     }
 
     #[test]
@@ -267,12 +252,6 @@ mod tests {
         // Register both storages
         storage1.register(&agent, None).unwrap();
         storage2.register(&agent, None).unwrap();
-
-        // Verify both are registered with correct sizes
-        assert!(storage1.is_registered());
-        assert!(storage2.is_registered());
-        assert_eq!(storage1.handle().unwrap().size, 1024);
-        assert_eq!(storage2.handle().unwrap().size, 2048);
 
         // Verify we can still access both memories
         storage1.memset(0xAA);
@@ -312,7 +291,6 @@ mod tests {
             // Register some memory regions
             let mut storage = SystemStorage::new(1024).unwrap();
             storage.register(&agent, Some(&opt_args)).unwrap();
-            assert!(storage.is_registered());
             storages.push(storage);
         }
 
