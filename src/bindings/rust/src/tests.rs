@@ -218,14 +218,13 @@ mod tests {
     fn test_memory_registration() {
         let agent = Agent::new("test_agent").unwrap();
         let mut storage = SystemStorage::new(1024).unwrap();
-        let mut opt_args = OptArgs::new().unwrap();
 
         // Test initial state
         assert!(!storage.is_registered());
         assert!(storage.handle().is_none());
 
         // Register memory
-        storage.register(&agent, &opt_args).unwrap();
+        storage.register(&agent, None).unwrap();
 
         // Verify registration
         assert!(storage.is_registered());
@@ -245,10 +244,9 @@ mod tests {
     fn test_registration_handle_drop() {
         let agent = Agent::new("test_agent").unwrap();
         let mut storage = SystemStorage::new(1024).unwrap();
-        let mut opt_args = OptArgs::new().unwrap();
 
         // Register memory
-        storage.register(&agent, &opt_args).unwrap();
+        storage.register(&agent, None).unwrap();
         assert!(storage.is_registered());
 
         // Drop the storage, which should trigger deregistration
@@ -256,7 +254,7 @@ mod tests {
 
         // Create new storage to verify we can register again
         let mut new_storage = SystemStorage::new(1024).unwrap();
-        new_storage.register(&agent, &opt_args).unwrap();
+        new_storage.register(&agent, None).unwrap();
         assert!(new_storage.is_registered());
     }
 
@@ -265,11 +263,10 @@ mod tests {
         let agent = Agent::new("test_agent").unwrap();
         let mut storage1 = SystemStorage::new(1024).unwrap();
         let mut storage2 = SystemStorage::new(2048).unwrap();
-        let mut opt_args = OptArgs::new().unwrap();
 
         // Register both storages
-        storage1.register(&agent, &opt_args).unwrap();
-        storage2.register(&agent, &opt_args).unwrap();
+        storage1.register(&agent, None).unwrap();
+        storage2.register(&agent, None).unwrap();
 
         // Verify both are registered with correct sizes
         assert!(storage1.is_registered());
@@ -314,7 +311,7 @@ mod tests {
         for _i in 0..10 {
             // Register some memory regions
             let mut storage = SystemStorage::new(1024).unwrap();
-            storage.register(&agent, &opt_args).unwrap();
+            storage.register(&agent, Some(&opt_args)).unwrap();
             assert!(storage.is_registered());
             storages.push(storage);
         }
@@ -387,10 +384,9 @@ mod tests {
         assert!(storage1.as_slice().iter().all(|&x| x == 0xbb));
         assert!(storage2.as_slice().iter().all(|&x| x == 0x00));
 
-        let mut opt_args = OptArgs::new().unwrap();
         // Create registration descriptor lists
-        storage1.register(&agent1, &opt_args).unwrap();
-        storage2.register(&agent2, &opt_args).unwrap();
+        storage1.register(&agent1, None).unwrap();
+        storage2.register(&agent2, None).unwrap();
 
         // Mimic transferring metadata from agent2 to agent1
         let metadata = agent2.get_local_md().unwrap();
