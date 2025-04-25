@@ -504,7 +504,7 @@ impl Agent {
 
     pub fn register_memory(
         &self,
-        descriptor: &dyn NixlDescriptor,
+        descriptor: &impl NixlDescriptor,
         opt_args: Option<&OptArgs>,
     ) -> Result<RegistrationHandle, NixlError> {
         let mut reg_dlist = RegDescList::new(descriptor.mem_type())?;
@@ -1446,7 +1446,7 @@ pub trait MemoryRegion: std::fmt::Debug + Send + Sync + 'static {
 }
 
 /// A trait for types that can be added to NIXL descriptor lists
-pub trait NixlDescriptor: MemoryRegion + 'static {
+pub trait NixlDescriptor: MemoryRegion {
     /// Get the memory type for this descriptor
     fn mem_type(&self) -> MemType;
 
