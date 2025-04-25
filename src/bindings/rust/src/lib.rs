@@ -1446,7 +1446,7 @@ pub trait MemoryRegion: std::fmt::Debug + Send + Sync + 'static {
 }
 
 /// A trait for types that can be added to NIXL descriptor lists
-pub trait NixlDescriptor: MemoryRegion {
+pub trait NixlDescriptor: MemoryRegion + 'static {
     /// Get the memory type for this descriptor
     fn mem_type(&self) -> MemType;
 
