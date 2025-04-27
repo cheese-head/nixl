@@ -1432,7 +1432,7 @@ impl<'a> Drop for RegDescList<'a> {
 }
 
 /// A trait for storage types that can be used with NIXL
-pub trait MemoryRegion: std::fmt::Debug + Send + Sync + 'static {
+pub trait MemoryRegion: std::fmt::Debug + Send + Sync {
     /// Get a raw pointer to the storage
     ///
     /// # Safety
