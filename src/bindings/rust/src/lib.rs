@@ -20,6 +20,7 @@
 //! `nixl` crate.
 
 use libc::uintptr_t;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString};
 use std::fmt;
