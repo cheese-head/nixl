@@ -252,6 +252,7 @@ impl Drop for Params {
 /// Inner state for an agent that manages the raw pointer
 #[derive(Debug)]
 struct AgentInner {
+    name: String,
     handle: NonNull<bindings::nixl_capi_agent_s>,
     backends: HashMap<String, NonNull<bindings::nixl_capi_backend_s>>,
     remotes: HashSet<String>,
@@ -261,8 +262,9 @@ unsafe impl Send for AgentInner {}
 unsafe impl Sync for AgentInner {}
 
 impl AgentInner {
-    fn new(handle: NonNull<bindings::nixl_capi_agent_s>) -> Self {
+    fn new(handle: NonNull<bindings::nixl_capi_agent_s>, name: String) -> Self {
         Self {
+            name,
             handle,
             backends: HashMap::new(),
             remotes: HashSet::new(),
@@ -336,7 +338,7 @@ impl Agent {
                 let handle = unsafe { NonNull::new_unchecked(agent) };
                 tracing::trace!(agent.name = %name, "Successfully created NIXL agent");
                 Ok(Self {
-                    inner: Arc::new(RwLock::new(AgentInner::new(handle))),
+                    inner: Arc::new(RwLock::new(AgentInner::new(handle, name.to_string()))),
                 })
             }
             NIXL_CAPI_ERROR_INVALID_PARAM => {
@@ -348,6 +350,11 @@ impl Agent {
                 Err(NixlError::BackendError)
             }
         }
+    }
+
+    /// Gets the name of the agent
+    pub fn name(&self) -> String {
+        self.inner.read().unwrap().name.clone()
     }
 
     /// Gets the list of available plugins
