@@ -809,6 +809,12 @@ pub struct RegistrationHandle {
 }
 
 impl RegistrationHandle {
+    pub fn agent_name(&self) -> Option<String> {
+        self.agent
+            .as_ref()
+            .map(|agent| agent.read().unwrap().name.clone())
+    }
+
     pub fn deregister(&mut self) -> Result<(), NixlError> {
         if let Some(agent) = self.agent.take() {
             tracing::trace!(
