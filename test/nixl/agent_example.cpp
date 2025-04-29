@@ -227,7 +227,7 @@ nixl_status_t partialMdTest(nixlAgent* A1, nixlAgent* A2, nixlBackendH* backend1
 
     nixl_reg_dlist_t empty_dlist(DRAM_SEG);
     std::string partial_meta;
-    status = A2->getLocalPartialMD(empty_dlist, NIXL_MD_OP_LOAD, partial_meta, NULL);
+    status = A2->getLocalPartialMD(empty_dlist, partial_meta, NULL);
     assert(status == NIXL_SUCCESS);
     assert(partial_meta.size() > 0);
 
@@ -258,7 +258,7 @@ nixl_status_t partialMdTest(nixlAgent* A1, nixlAgent* A2, nixlBackendH* backend1
 
         std::cout << "Metadata update #" << update << "\n";
         // Get partial metadata from A2
-        status = A2->getLocalPartialMD(dst_mem_lists[update], NIXL_MD_OP_LOAD, partial_meta, &extra_params2);
+        status = A2->getLocalPartialMD(dst_mem_lists[update], partial_meta, &extra_params2);
         assert(status == NIXL_SUCCESS);
         assert(partial_meta.size() > 0);
 
@@ -364,12 +364,13 @@ nixl_status_t partialMdTest(nixlAgent* A1, nixlAgent* A2, nixlBackendH* backend1
 
     // Unload metadata one dlist at a time in reverse order and verify results
     extra_params2.includeConnInfo = false;
+    extra_params2.metadataForUnload = true;
     for (int update = NUM_UPDATES - 1; update >= 0; update--) {
         std::cout << "Metadata unload #" << update << "\n";
 
         // Get partial metadata for unload from A2
         std::string partial_meta;
-        status = A2->getLocalPartialMD(dst_mem_lists[update], NIXL_MD_OP_UNLOAD, partial_meta, &extra_params2);
+        status = A2->getLocalPartialMD(dst_mem_lists[update], partial_meta, &extra_params2);
         assert(status == NIXL_SUCCESS);
         assert(partial_meta.size() > 0);
 
@@ -409,7 +410,9 @@ nixl_status_t partialMdTest(nixlAgent* A1, nixlAgent* A2, nixlBackendH* backend1
 
     // Unload connection info
     partial_meta.clear();
-    status = A2->getLocalPartialMD(empty_dlist, NIXL_MD_OP_UNLOAD, partial_meta, NULL);
+    extra_params2.includeConnInfo = true;
+    extra_params2.metadataForUnload = true;
+    status = A2->getLocalPartialMD(empty_dlist, partial_meta, &extra_params2);
     assert(status == NIXL_SUCCESS);
     assert(partial_meta.size() > 0);
 

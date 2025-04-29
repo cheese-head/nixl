@@ -1021,15 +1021,11 @@ nixlAgent::getLocalMD (nixl_blob_t &str) const {
 
 nixl_status_t
 nixlAgent::getLocalPartialMD(const nixl_reg_dlist_t &descs,
-                             nixl_md_op_t op,
                              nixl_blob_t &str,
                              const nixl_opt_args_t* extra_params) const {
     backend_list_t tmp_list;
     backend_list_t *backend_list;
     nixl_status_t ret;
-
-    if (op != NIXL_MD_OP_LOAD && op != NIXL_MD_OP_UNLOAD)
-        return NIXL_ERR_INVALID_PARAM;
 
     NIXL_LOCK_GUARD(data->lock);
 
@@ -1068,7 +1064,8 @@ nixlAgent::getLocalPartialMD(const nixl_reg_dlist_t &descs,
     if(ret)
         return ret;
 
-    ret = sd.addStr("Op", op == NIXL_MD_OP_LOAD ? "Load" : "Unload");
+    ret = sd.addStr("Op",
+                    (extra_params && extra_params->metadataForUnload) ? "Unload" : "Load");
     if(ret)
         return ret;
 
@@ -1327,10 +1324,9 @@ nixlAgent::sendLocalMD (const nixl_opt_args_t* extra_params) const {
 
 nixl_status_t
 nixlAgent::sendLocalPartialMD(const nixl_reg_dlist_t &descs,
-                              nixl_md_op_t op,
                               const nixl_opt_args_t* extra_params) const {
     nixl_blob_t myMD;
-    nixl_status_t ret = getLocalPartialMD(descs, op, myMD, extra_params);
+    nixl_status_t ret = getLocalPartialMD(descs, myMD, extra_params);
     if(ret < 0) return ret;
 
     // If IP is provided, use socket-based communication

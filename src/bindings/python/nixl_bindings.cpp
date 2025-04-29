@@ -508,7 +508,7 @@ PYBIND11_MODULE(_bindings, m) {
                         extra_params.backends.push_back((nixlBackendH*) backend);
                     extra_params.includeConnInfo = inc_conn_info;
 
-                    throw_nixl_exception(agent.getLocalPartialMD(descs, NIXL_MD_OP_LOAD, ret_str, &extra_params));
+                    throw_nixl_exception(agent.getLocalPartialMD(descs, ret_str, &extra_params));
                     return py::bytes(ret_str);
                 }, py::arg("descs"), py::arg("inc_conn_info") = false, py::arg("backends") = std::vector<uintptr_t>({}))
         .def("loadRemoteMD", [](nixlAgent &agent, const std::string &remote_metadata) -> py::bytes {
@@ -538,7 +538,7 @@ PYBIND11_MODULE(_bindings, m) {
                     extra_params.ipAddr = ip_addr;
                     extra_params.port = port;
 
-                    throw_nixl_exception(agent.sendLocalPartialMD(descs, NIXL_MD_OP_LOAD, &extra_params));
+                    throw_nixl_exception(agent.sendLocalPartialMD(descs, &extra_params));
                 }, py::arg("descs"), py::arg("inc_conn_info") = false, py::arg("backends") = std::vector<uintptr_t>({}), py::arg("ip_addr") = std::string(""), py::arg("port") = 0)
         .def("fetchRemoteMD", [](nixlAgent &agent, std::string remote_agent, std::string ip_addr, int port){
                     nixl_opt_args_t extra_params;
