@@ -55,8 +55,24 @@ private:
     std::string makeKey(const std::string& operation, int src,
 		    	int dst, xferBenchEtcdMsgType type = XFER_BENCH_ETCD_MSG_TYPE_INT);
 
+    int *terminate;
+
+    bool error() const { return terminate != nullptr && *terminate; };
+    int retry(int value) const { return error() ? 0 : value; };
+
+    std::string key(std::string name, int rank = -1) const {
+        std::string suffix;
+
+        if (rank > -1) {
+            suffix = "/" + std::to_string(rank);
+        }
+
+        return namespace_prefix + name + suffix;
+    }
+
 public:
-    xferBenchEtcdRT(const std::string& etcd_endpoints, const int size);
+    xferBenchEtcdRT(const std::string& etcd_endpoints, const int size,
+                    int *terminate = nullptr);
     ~xferBenchEtcdRT();
 
     int getRank() const;

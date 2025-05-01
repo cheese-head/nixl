@@ -28,6 +28,7 @@
 #endif
 #include <unistd.h>
 #include <memory>
+#include <csignal>
 
 static std::pair<size_t, size_t> getStrideScheme(xferBenchWorker &worker, int num_threads) {
     int initiator_device, target_device;
@@ -99,7 +100,8 @@ static int processBatchSizes(xferBenchWorker &worker,
                              std::vector<std::vector<xferBenchIOV>> &iov_lists,
                              size_t block_size, int num_threads) {
     for (size_t batch_size = xferBenchConfig::start_batch_size;
-         batch_size <= xferBenchConfig::max_batch_size;
+         !worker.signaled() &&
+             batch_size <= xferBenchConfig::max_batch_size;
          batch_size *= 2) {
         auto local_trans_lists = createTransferDescLists(worker,
                                                          iov_lists,
@@ -162,12 +164,23 @@ static std::unique_ptr<xferBenchWorker> createWorker(int *argc, char ***argv) {
     }
 }
 
-int main(int argc, char *argv[]) {
-    int ret;
+static int *sigTerminate;
 
+static void signalHandler(int signal) {
+    static const char msg[] = "Ctrl-C received, exiting...\n";
+    auto size = write(1, msg, sizeof(msg) - 1);
+    (void)size;
+
+    (*sigTerminate)++;
+    if (*sigTerminate > 2) {
+        std::_Exit(EXIT_FAILURE);
+    }
+}
+
+int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    ret = xferBenchConfig::loadFromFlags();
+    int ret = xferBenchConfig::loadFromFlags();
     if (0 != ret) {
         return EXIT_FAILURE;
     }
@@ -179,6 +192,9 @@ int main(int argc, char *argv[]) {
     if (!worker_ptr) {
         return EXIT_FAILURE;
     }
+
+    sigTerminate = worker_ptr->signal_ptr();
+    std::signal(SIGINT, signalHandler);
 
     // Ensure all processes are ready before exchanging metadata
     ret = worker_ptr->synchronizeStart();
@@ -203,6 +219,7 @@ int main(int argc, char *argv[]) {
     }
 
     for (size_t block_size = xferBenchConfig::start_block_size;
+         !worker_ptr->signaled() &&
          block_size <= xferBenchConfig::max_block_size;
          block_size *= 2) {
         ret = processBatchSizes(*worker_ptr, iov_lists, block_size, num_threads);
@@ -213,5 +230,5 @@ int main(int argc, char *argv[]) {
 
     gflags::ShutDownCommandLineFlags();
 
-    return EXIT_SUCCESS;
+    return worker_ptr->signaled() ? EXIT_FAILURE : EXIT_SUCCESS;
 }
