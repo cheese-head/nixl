@@ -40,6 +40,7 @@ class xferBenchWorker {
         bool isTarget();
         int* signal_ptr() { return &terminate; }
         bool signaled() const { return terminate != 0; }
+        int synchronize();
 
         // Memory management
         virtual std::vector<std::vector<xferBenchIOV>> allocateMemory(int num_threads) = 0;
