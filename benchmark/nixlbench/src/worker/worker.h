@@ -29,6 +29,8 @@ class xferBenchWorker {
     protected:
         std::string name;
         xferBenchRT *rt;
+        int terminate;
+
     public:
         xferBenchWorker(int *argc, char ***argv);
         virtual ~xferBenchWorker();
@@ -36,6 +38,8 @@ class xferBenchWorker {
         std::string getName() const;
         bool isInitiator();
         bool isTarget();
+        int* signal_ptr() { return &terminate; }
+        bool signaled() const { return terminate != 0; }
 
         // Memory management
         virtual std::vector<std::vector<xferBenchIOV>> allocateMemory(int num_threads) = 0;
