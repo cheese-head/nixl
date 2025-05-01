@@ -51,6 +51,7 @@ private:
     // Rank information
     int my_rank;
     int global_size;
+    uint64_t barrier_gen;
 
     std::string makeKey(const std::string& operation, int src,
 		    	int dst, xferBenchEtcdMsgType type = XFER_BENCH_ETCD_MSG_TYPE_INT);

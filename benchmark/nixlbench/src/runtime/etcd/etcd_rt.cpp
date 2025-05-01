@@ -37,8 +37,8 @@ xferBenchEtcdRT::xferBenchEtcdRT(const std::string& etcd_endpoints, const int si
         use_etcd_ep = etcd_endpoints;
     }
 
-    // Namespace for XFER benchmark
-    namespace_prefix = "xferbench/";
+    namespace_prefix = "xferbench/"; // Namespace for XFER benchmark
+    barrier_gen = 0;
 
     // Connect to ETCD
     try {
@@ -377,98 +377,45 @@ int xferBenchEtcdRT::reduceSumDouble(double *local_value, double *global_value, 
 
 int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
     try {
-        // Create a unique key for this barrier
-        std::string barrier_key = namespace_prefix + "barrier/" + barrier_id;
-        std::string count_key = barrier_key + "/count";
-        std::string ready_key = barrier_key + "/ready";
+        int count = -1;
+        std::string barrier_suffix = "barrier/" + barrier_id + "/" + std::to_string(barrier_gen);
+        std::string barrier_key = namespace_prefix + barrier_suffix + "/";
 
-        // Create a unique key for this process
-        std::string process_key = barrier_key + "/proc-" + std::to_string(my_rank);
+        barrier_gen++; // In case same barrier is reused too quickly
 
-        // Register this process as having reached the barrier
-        client->put(process_key, "arrived").get();
-
-        // Use etcd atomic operations to increment the count
-        auto resp = client->get(count_key).get();
-        int current_count = 0;
-        if (resp.error_code() == 0) {
-            current_count = std::stoi(resp.value().as_string());
+        auto resp = client->put(barrier_key + "/" + std::to_string(my_rank), "1").get();
+        if (!resp.is_ok()) {
+            goto fail;
         }
 
-        // Increment the count
-        client->put(count_key, std::to_string(current_count + 1)).get();
+        for (auto retries = 0; retries < 60; ++retries) {
+            auto resp = client->ls(barrier_key).get();
+            if (resp.error_code()) {
+                goto fail;
+            }
 
-        bool barrier_complete = false;
-        int retries = 0;
-        int expected_count = global_size;
-
-        while (!barrier_complete && retries < 30) { // 5 minutes timeout (300 seconds)
-            resp = client->get(count_key).get();
-            if (resp.error_code() == 0) {
-                current_count = std::stoi(resp.value().as_string());
-
-                if (current_count >= expected_count) {
-                    // All processes have arrived
-                    barrier_complete = true;
-
-                    // If we're the last one, mark the barrier as ready
-                    if (current_count == expected_count) {
-                        client->put(ready_key, "true").get();
-                    }
-                } else {
-                    // Wait for more processes
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
-                    retries++;
+            count = resp.keys().size();
+            if (count == 0 || // rank 0 observed completion and deleted the barrier
+                count == (int)global_size) {
+                if (my_rank == 0) {
+                    // Only one of them needs to cleanup
+                    client->rmdir(barrier_key, true).get();
                 }
-            } else {
-                // Error reading count
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                retries++;
+                return 0;
             }
+
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
-        // If we timed out
-        if (!barrier_complete) {
-            std::cerr << "Rank " << my_rank << " timed out waiting for barrier "
-                      << barrier_id << " completion (got " << current_count << "/" << expected_count << " processes)" << std::endl;
-            return -1;
-        }
-
-        // Wait for the ready flag
-        retries = 0;
-        bool ready = false;
-
-        while (!ready && retries < 60) { // 1 minute timeout
-            resp = client->get(ready_key).get();
-            if (resp.error_code() == 0 && resp.value().as_string() == "true") {
-                ready = true;
-            } else {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                retries++;
-            }
-        }
-
-        if (!ready) {
-            std::cerr << "Rank " << my_rank << " timed out waiting for barrier "
-                      << barrier_id << " ready signal" << std::endl;
-            return -1;
-        }
-
-        // Clean up our process marker
-        client->rm(process_key).get();
-
-        // Last one leaving cleans up
-        if (my_rank == 0) {
-            // Give everyone time to proceed
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            client->rmdir(barrier_key, true).get();
-        }
-
-        return 0;
+fail:
+        std::cerr << "Rank " << my_rank << " barrier " << barrier_key << " failure "
+            << " completion (got " << count << "/" << global_size << " ranks)"
+            << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Error in barrier: " << e.what() << std::endl;
-        return -1;
+        std::cerr << "Error in broadcast operation: " << e.what() << std::endl;
     }
+
+    return -1;
 }
 
 int xferBenchEtcdRT::broadcastInt(int* buffer, size_t count, int root_rank) {
