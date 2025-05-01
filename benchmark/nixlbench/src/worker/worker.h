@@ -36,6 +36,7 @@ class xferBenchWorker {
         std::string getName() const;
         bool isInitiator();
         bool isTarget();
+        int synchronize();
 
         // Memory management
         virtual std::vector<std::vector<xferBenchIOV>> allocateMemory(int num_threads) = 0;

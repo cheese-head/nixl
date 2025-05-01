@@ -36,6 +36,10 @@ static xferBenchRT *createRT(int *argc, char ***argv) {
     return nullptr;
 }
 
+int xferBenchWorker::synchronize() {
+    return rt->barrier("sync");
+}
+
 xferBenchWorker::xferBenchWorker(int *argc, char ***argv) {
     int rank;
 
