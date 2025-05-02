@@ -46,12 +46,12 @@ apt-get -qq install liburing-dev
 
 echo "==== Running C++ tests ===="
 cd ${INSTALL_DIR}
+./bin/nixl_posix_test -n 512
 ./bin/desc_example
 ./bin/agent_example
 ./bin/nixl_example
 ./bin/ucx_backend_test
 ./bin/ucx_mo_backend_test
-./bin/nixl_posix_test -n 512
 ./bin/ucx_backend_multi
 ./bin/serdes_test
 ./bin/gtest
