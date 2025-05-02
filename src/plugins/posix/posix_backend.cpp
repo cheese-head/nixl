@@ -67,8 +67,9 @@ uringQueue::uringQueue(int num_entries, io_uring_params params)
     memset(&uring, 0, sizeof(uring));
 
     int uring_init_status = io_uring_queue_init_params(num_entries, &uring, &params);
-    if (uring_init_status != 0)
-        throw UringError::INIT;
+    if (uring_init_status != 0) {
+        throw UringError(absl::StrFormat("Failed to init io_uring - errno: %d", errno));
+    }
 }
 
 uringQueue::~uringQueue() {
@@ -250,7 +251,7 @@ nixl_status_t nixlPosixEngine::prepXfer(const nixl_xfer_op_t &operation,
     } catch (nixlPosixBackendReqH::OperationError error) {
         NIXL_LOG_AND_RETURN_IF_ERROR(NIXL_ERR_INVALID_PARAM, "Invalid operation type");
     } catch (const uringQueue::UringError& e) {
-        NIXL_LOG_AND_RETURN_IF_ERROR(NIXL_ERR_BACKEND, "Failed to init io_uring");
+        NIXL_LOG_AND_RETURN_IF_ERROR(NIXL_ERR_BACKEND, e.what());
     } catch (const std::exception& e) {
         NIXL_LOG_AND_RETURN_IF_ERROR(NIXL_ERR_BACKEND, absl::StrFormat("Unexpected error: %s", e.what()));
     }

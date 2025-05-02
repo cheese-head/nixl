@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 #include <liburing.h>
+#include <stdexcept>
 #include "backend/backend_engine.h"
 
 class uringQueue {
@@ -43,8 +44,9 @@ class uringQueue {
         nixl_status_t checkCompleted();
         struct io_uring_sqe *getSqe();
 
-        enum class UringError {
-            INIT,
+        class UringError : public std::runtime_error {
+            public:
+                using std::runtime_error::runtime_error;
         };
 };
 
