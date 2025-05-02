@@ -48,13 +48,8 @@ private:
     std::string namespace_prefix;
     std::unique_ptr<etcd::Client> client;
 
-    // Rank information
-    int my_rank;
+    int my_rank; // Rank information
     int global_size;
-
-    std::string makeKey(const std::string& operation, int src,
-		    	int dst, xferBenchEtcdMsgType type = XFER_BENCH_ETCD_MSG_TYPE_INT);
-
     int *terminate;
 
     bool error() const { return terminate != nullptr && *terminate; };
@@ -62,7 +57,10 @@ private:
 	    return !error() && value < max;
     }
 
-    std::string key(std::string name, int rank = -1) const {
+    std::string makeTypedKey(const std::string& operation, int src, int dst,
+                             xferBenchEtcdMsgType type = XFER_BENCH_ETCD_MSG_TYPE_INT);
+
+    std::string makeKey(std::string name, int rank = -1) const {
         std::string suffix;
 
         if (rank > -1) {

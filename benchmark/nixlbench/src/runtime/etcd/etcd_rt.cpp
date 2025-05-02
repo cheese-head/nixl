@@ -51,7 +51,7 @@ xferBenchEtcdRT::xferBenchEtcdRT(const std::string& etcd_endpoints, const int si
     }
 
     // Registration process - get a unique rank
-    std::string lock_key = key("lock");
+    std::string lock_key = makeKey("lock");
 
     // Try to acquire a lock for registration
     auto lock_response = client->lock(lock_key).get();
@@ -61,7 +61,7 @@ xferBenchEtcdRT::xferBenchEtcdRT(const std::string& etcd_endpoints, const int si
     }
 
     // Get the current size - number of processes that have registered
-    auto size_response = client->get(key("size")).get();
+    auto size_response = client->get(makeKey("size")).get();
     if (size_response.error_code() == 0) {
         my_rank = std::stoi(size_response.value().as_string());
     } else {
@@ -72,8 +72,8 @@ xferBenchEtcdRT::xferBenchEtcdRT(const std::string& etcd_endpoints, const int si
     global_size = size;
 
     // Update registration information
-    client->put(key("size"), std::to_string(my_rank + 1)).get();
-    client->put(key("rank", my_rank), "active").get();
+    client->put(makeKey("size"), std::to_string(my_rank + 1)).get();
+    client->put(makeKey("rank", my_rank), "active").get();
 
     // Release the lock
     client->unlock(lock_response.lock_key()).get();
@@ -89,7 +89,7 @@ xferBenchEtcdRT::xferBenchEtcdRT(const std::string& etcd_endpoints, const int si
 
 xferBenchEtcdRT::~xferBenchEtcdRT() {
     // All ranks delete, as some could be missing if ETCD state is confused
-    client->rmdir(key(""), true).get();
+    client->rmdir(makeKey(""), true).get();
 }
 
 int xferBenchEtcdRT::getRank() const {
@@ -100,8 +100,8 @@ int xferBenchEtcdRT::getSize() const {
     return global_size;
 }
 
-std::string xferBenchEtcdRT::makeKey(const std::string& operation, int src, int dst,
-                                     xferBenchEtcdMsgType type) {
+std::string xferBenchEtcdRT::makeTypedKey(const std::string& operation, int src,
+                                          int dst, xferBenchEtcdMsgType type) {
     std::stringstream ss;
     ss << namespace_prefix << operation << "+"
        << (type == XFER_BENCH_ETCD_MSG_TYPE_INT ? "int_data" : "char_data") << "/"
@@ -113,7 +113,7 @@ std::string xferBenchEtcdRT::makeKey(const std::string& operation, int src, int 
 int xferBenchEtcdRT::sendInt(int* buffer, int dest_rank) {
     try {
         // Create the message key
-        std::string msg_key = makeKey("msg", my_rank, dest_rank, XFER_BENCH_ETCD_MSG_TYPE_INT);
+        std::string msg_key = makeTypedKey("msg", my_rank, dest_rank, XFER_BENCH_ETCD_MSG_TYPE_INT);
         std::string ack_key = msg_key + "/ack";
 
         // Store the integer value directly as a string
@@ -150,7 +150,7 @@ int xferBenchEtcdRT::sendInt(int* buffer, int dest_rank) {
 
 int xferBenchEtcdRT::recvInt(int* buffer, int src_rank) {
     // Create the message key
-    std::string msg_key = makeKey("msg", src_rank, my_rank, XFER_BENCH_ETCD_MSG_TYPE_INT);
+    std::string msg_key = makeTypedKey("msg", src_rank, my_rank, XFER_BENCH_ETCD_MSG_TYPE_INT);
     std::string ack_key = msg_key + "/ack";
 
     // Poll until the data is available (blocking)
@@ -199,7 +199,7 @@ int xferBenchEtcdRT::recvInt(int* buffer, int src_rank) {
 int xferBenchEtcdRT::sendChar(char* buffer, size_t count, int dest_rank) {
     try {
         // Create the message key and data key
-        std::string msg_key = makeKey("msg", my_rank, dest_rank, XFER_BENCH_ETCD_MSG_TYPE_CHAR);
+        std::string msg_key = makeTypedKey("msg", my_rank, dest_rank, XFER_BENCH_ETCD_MSG_TYPE_CHAR);
         std::string data_key = msg_key + "/data";
         std::string ack_key = msg_key + "/ack";
 
@@ -241,7 +241,7 @@ int xferBenchEtcdRT::sendChar(char* buffer, size_t count, int dest_rank) {
 
 int xferBenchEtcdRT::recvChar(char* buffer, size_t count, int src_rank) {
     // Create the message keys
-    std::string msg_key = makeKey("msg", src_rank, my_rank, XFER_BENCH_ETCD_MSG_TYPE_CHAR);
+    std::string msg_key = makeTypedKey("msg", src_rank, my_rank, XFER_BENCH_ETCD_MSG_TYPE_CHAR);
     std::string data_key = msg_key + "/data";
     std::string ack_key = msg_key + "/ack";
 
@@ -293,7 +293,7 @@ int xferBenchEtcdRT::reduceSumDouble(double *local_value, double *global_value, 
     try {
         // Use a random ID for this reduction operation
         std::string reduce_id = std::to_string(std::time(nullptr)) + "-" + std::to_string(std::rand());
-        std::string reduce_key = key("reduce/" + reduce_id);
+        std::string reduce_key = makeKey("reduce/" + reduce_id);
         std::string value_key = reduce_key + "/rank-" + std::to_string(my_rank);
 
         // Contribute our value directly as a string
@@ -364,7 +364,7 @@ int xferBenchEtcdRT::reduceSumDouble(double *local_value, double *global_value, 
 int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
     try {
         // Create a unique key for this barrier
-        std::string barrier_key = key("barrier/" + barrier_id);
+        std::string barrier_key = makeKey("barrier/" + barrier_id);
         std::string count_key = barrier_key + "/count";
         std::string ready_key = barrier_key + "/ready";
 
@@ -460,7 +460,7 @@ int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
 int xferBenchEtcdRT::broadcastInt(int* buffer, size_t count, int root_rank) {
     try {
         // Create a unique key for this broadcast operation
-        std::string bcast_key  = key("bcast/int", root_rank);
+        std::string bcast_key  = makeKey("bcast/int", root_rank);
         std::string barrier_id = "bcast_int_" + std::to_string(root_rank);
 
         // First phase: root process puts the value in etcd
