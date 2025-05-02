@@ -376,22 +376,21 @@ int xferBenchEtcdRT::reduceSumDouble(double *local_value, double *global_value, 
 }
 
 int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
+    int count = 0;
+    std::string barrier_suffix = "barrier/" + barrier_id + "/" + std::to_string(barrier_gen);
+    std::string barrier_key = namespace_prefix + barrier_suffix + "/";
+    barrier_gen++; // In case same barrier is reused too quickly
+
     try {
-        int count = -1;
-        std::string barrier_suffix = "barrier/" + barrier_id + "/" + std::to_string(barrier_gen);
-        std::string barrier_key = namespace_prefix + barrier_suffix + "/";
-
-        barrier_gen++; // In case same barrier is reused too quickly
-
-        auto resp = client->put(barrier_key + "/" + std::to_string(my_rank), "1").get();
+        auto resp = client->put(barrier_key + std::to_string(my_rank), "1").get();
         if (!resp.is_ok()) {
-            goto fail;
+            throw std::runtime_error("put");
         }
 
         for (auto retries = 0; retries < 60; ++retries) {
             auto resp = client->ls(barrier_key).get();
             if (resp.error_code()) {
-                goto fail;
+                break;
             }
 
             count = resp.keys().size();
@@ -407,12 +406,11 @@ int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
-fail:
-        std::cerr << "Rank " << my_rank << " barrier " << barrier_key << " failure "
-            << " completion (got " << count << "/" << global_size << " ranks)"
-            << std::endl;
+        throw std::runtime_error("wait");
     } catch (const std::exception& e) {
-        std::cerr << "Error in broadcast operation: " << e.what() << std::endl;
+        std::cerr << "Eror in barrier " << e.what() << " " << barrier_key
+            << " rank " << my_rank << " completed "
+            << count << "/" << global_size << " ranks)" << std::endl;
     }
 
     return -1;
