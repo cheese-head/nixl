@@ -408,7 +408,7 @@ int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
 
         throw std::runtime_error("wait");
     } catch (const std::exception& e) {
-        std::cerr << "Eror in barrier " << e.what() << " " << barrier_key
+        std::cerr << "Error in barrier " << e.what() << " " << barrier_key
             << " rank " << my_rank << " completed "
             << count << "/" << global_size << " ranks)" << std::endl;
     }
