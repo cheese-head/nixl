@@ -88,7 +88,7 @@ xferBenchEtcdRT::xferBenchEtcdRT(const std::string& etcd_endpoints, const int si
 }
 
 xferBenchEtcdRT::~xferBenchEtcdRT() {
-    // All ranks delete, as of them could be missing if ETCD state is confused
+    // All ranks delete, as some could be missing if ETCD state is confused
     client->rmdir(key(""), true).get();
 }
 
@@ -121,10 +121,9 @@ int xferBenchEtcdRT::sendInt(int* buffer, int dest_rank) {
         client->put(msg_key, value_str).get();
 
         int retries = 0;
-        const int MAX_RETRIES = 60; // 1 minute timeout
         bool ack_received = false;
 
-        while (!ack_received && retries < retry(MAX_RETRIES)) {
+        while (!ack_received && should_retry(retries)) {
             auto ack_response = client->get(ack_key).get();
             if (ack_response.error_code() == 0 && ack_response.value().as_string() == "received") {
                 ack_received = true;
@@ -156,10 +155,9 @@ int xferBenchEtcdRT::recvInt(int* buffer, int src_rank) {
 
     // Poll until the data is available (blocking)
     int retries = 0;
-    const int MAX_RETRIES = 60; // 1 minute timeout
     bool data_received = false;
 
-    while (!data_received && retries < retry(MAX_RETRIES)) {
+    while (!data_received && should_retry(retries)) {
         auto response = client->get(msg_key).get();
         if (response.error_code() == 0) {
             // Get the value directly as a string
@@ -214,10 +212,9 @@ int xferBenchEtcdRT::sendChar(char* buffer, size_t count, int dest_rank) {
         client->put(msg_key, meta).get();
 
         int retries = 0;
-        const int MAX_RETRIES = 60; // 1 minute timeout
         bool ack_received = false;
 
-        while (!ack_received && retries < retry(MAX_RETRIES)) {
+        while (!ack_received && should_retry(retries)) {
             auto ack_response = client->get(ack_key).get();
             if (ack_response.error_code() == 0 && ack_response.value().as_string() == "received") {
                 ack_received = true;
@@ -250,10 +247,9 @@ int xferBenchEtcdRT::recvChar(char* buffer, size_t count, int src_rank) {
 
     // Poll until the data is available (blocking)
     int retries = 0;
-    const int MAX_RETRIES = 60; // 1 minute timeout
     bool data_received = false;
 
-    while (!data_received && retries < retry(MAX_RETRIES)) {
+    while (!data_received && should_retry(retries)) {
         // First check if metadata exists
         auto meta_response = client->get(msg_key).get();
         if (meta_response.error_code() == 0) {
@@ -480,10 +476,9 @@ int xferBenchEtcdRT::broadcastInt(int* buffer, size_t count, int root_rank) {
         // Second phase: non-root processes read the value
         if (my_rank != root_rank) {
             int retries = 0;
-            const int MAX_RETRIES = 10;
             bool data_received = false;
 
-            while (!data_received && retries < retry(MAX_RETRIES)) {
+            while (!data_received && should_retry(retries, 10)) {
                 auto response = client->get(bcast_key).get();
                 if (response.error_code() == 0) {
                     std::string value_str = response.value().as_string();

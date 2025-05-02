@@ -58,7 +58,9 @@ private:
     int *terminate;
 
     bool error() const { return terminate != nullptr && *terminate; };
-    int retry(int value) const { return error() ? 0 : value; };
+    bool should_retry(int value, int max = 60) const {
+	    return !error() && value < max;
+    }
 
     std::string key(std::string name, int rank = -1) const {
         std::string suffix;

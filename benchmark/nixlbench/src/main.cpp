@@ -168,11 +168,13 @@ static int *sigTerminate;
 
 static void signalHandler(int signal) {
     static const char msg[] = "Ctrl-C received, exiting...\n";
-    auto size = write(1, msg, sizeof(msg) - 1);
+    constexpr int stdout_fd = 1;
+    constexpr int max_count = 1;
+    auto size = write(stdout_fd, msg, sizeof(msg) - 1);
     (void)size;
 
     (*sigTerminate)++;
-    if (*sigTerminate > 2) {
+    if (*sigTerminate > max_count) {
         std::_Exit(EXIT_FAILURE);
     }
 }
