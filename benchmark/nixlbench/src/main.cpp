@@ -164,21 +164,6 @@ static std::unique_ptr<xferBenchWorker> createWorker(int *argc, char ***argv) {
     }
 }
 
-static int *sigTerminate;
-
-static void signalHandler(int signal) {
-    static const char msg[] = "Ctrl-C received, exiting...\n";
-    constexpr int stdout_fd = 1;
-    constexpr int max_count = 1;
-    auto size = write(stdout_fd, msg, sizeof(msg) - 1);
-    (void)size;
-
-    (*sigTerminate)++;
-    if (*sigTerminate > max_count) {
-        std::_Exit(EXIT_FAILURE);
-    }
-}
-
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
@@ -195,8 +180,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    sigTerminate = worker_ptr->signal_ptr();
-    std::signal(SIGINT, signalHandler);
+    std::signal(SIGINT, worker_ptr->signalHandler);
 
     // Ensure all processes are ready before exchanging metadata
     ret = worker_ptr->synchronizeStart();

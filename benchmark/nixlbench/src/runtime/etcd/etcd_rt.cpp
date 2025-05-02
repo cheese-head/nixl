@@ -311,7 +311,7 @@ int xferBenchEtcdRT::reduceSumDouble(double *local_value, double *global_value, 
             int expected = global_size - 1; // Excluding ourselves
             int retries = 0;
 
-            while (received < expected && retries < retry(30)) {
+            while (received < expected && should_retry(retries, 30)) {
                 auto response = client->ls(reduce_key).get();
                 if (response.error_code() == 0) {
                     for (const auto& kv : response.keys()) {
@@ -388,7 +388,7 @@ int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
         int retries = 0;
         int expected_count = global_size;
 
-        while (!barrier_complete && retries < retry(30)) { // 5 minutes timeout (300 seconds)
+        while (!barrier_complete && should_retry(retries, 30)) {
             resp = client->get(count_key).get();
             if (resp.error_code() == 0) {
                 current_count = std::stoi(resp.value().as_string());
@@ -424,7 +424,7 @@ int xferBenchEtcdRT::barrier(const std::string& barrier_id) {
         retries = 0;
         bool ready = false;
 
-        while (!ready && retries < retry(60)) { // 1 minute timeout
+        while (!ready && should_retry(retries)) {
             resp = client->get(ready_key).get();
             if (resp.error_code() == 0 && resp.value().as_string() == "true") {
                 ready = true;
