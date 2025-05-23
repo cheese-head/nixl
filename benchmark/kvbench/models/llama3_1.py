@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml  # type: ignore
 from models.model_config import ModelConfig
@@ -37,7 +37,7 @@ class Llama3_1(BaseModelArch):
         query_head_dimension: int,
         gqa_num_queries_in_group: int,
         num_model_params: int,
-        model_config: ModelConfig = None,
+        model_config: Optional[ModelConfig] = None,
     ):
         """
         Initialize a Llama 3.1 model architecture.

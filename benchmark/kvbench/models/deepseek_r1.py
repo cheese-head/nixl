@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import math
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml  # type: ignore
 from models.model_config import ModelConfig
@@ -40,7 +40,7 @@ class DeepSeekR1(BaseModelArch):
         rope_mla_dimension: int,
         mla_latent_vector_dimension: int,
         num_model_params: int,
-        model_config: ModelConfig = None,
+        model_config: Optional[ModelConfig] = None,
     ):
         """
         Initialize a DeepSeek-R1 model architecture.
