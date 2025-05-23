@@ -88,7 +88,9 @@ class BaseModelArch(ABC):
         raise NotImplementedError("Subclasses must implement this method")
 
     @classmethod
-    def from_yaml(cls, yaml_path: str, model_config: Optional[ModelConfig] = None) -> "BaseModelArch":
+    def from_yaml(
+        cls, yaml_path: str, model_config: Optional[ModelConfig] = None
+    ) -> "BaseModelArch":
         """
         Create a model architecture instance from a YAML configuration file.
 

@@ -51,7 +51,7 @@ class Llama3_1(BaseModelArch):
             num_model_params (int): Total number of model parameters.
         """
         self.model_name = model_name
-        self.model_config = model_config
+        self.model_config = model_config or ModelConfig()
         self.num_layers = num_layers
         self.num_query_heads_with_mha = num_query_heads_with_mha
         self.query_head_dimension = query_head_dimension
