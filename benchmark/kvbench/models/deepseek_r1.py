@@ -40,13 +40,13 @@ class DeepSeekR1(BaseModelArch):
         rope_mla_dimension: int,
         mla_latent_vector_dimension: int,
         num_model_params: int,
-        model_config: ModelConfig,
+        model_config: ModelConfig = None,
     ):
         """
         Initialize a DeepSeek-R1 model architecture.
 
         Args:
-            model (str): The model identifier.
+            model_name (str): The model identifier.
             num_layers (int): Number of transformer layers.
             num_query_heads (int): Number of query heads.
             query_head_dimension (int): Dimension of each query head.
@@ -116,7 +116,7 @@ class DeepSeekR1(BaseModelArch):
             Dict[str, Any]: A dictionary containing all model configuration parameters.
         """
         return {
-            "model": self.model.lower(),
+            "model_name": self.model_name.lower(),
             "num_layers": self.num_layers,
             "num_query_heads": self.num_query_heads,
             "query_head_dimension": self.query_head_dimension,

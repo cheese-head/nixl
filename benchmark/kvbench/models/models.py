@@ -88,7 +88,7 @@ class BaseModelArch(ABC):
         raise NotImplementedError("Subclasses must implement this method")
 
     @classmethod
-    def from_yaml(cls, yaml_path: str, model_config: None) -> "BaseModelArch":
+    def from_yaml(cls, yaml_path: str, model_config: ModelConfig = None) -> "BaseModelArch":
         """
         Create a model architecture instance from a YAML configuration file.
 
@@ -106,7 +106,7 @@ class BaseModelArch(ABC):
         with open(yaml_path, "r") as f:
             config = yaml.safe_load(f)
             filtered_dict = {k: v for k, v in config.items() if v is not None}
-            model_name = filtered_dict.get("model")
+            model_name = filtered_dict.get("model_name")
 
             if model_name is None:
                 raise ValueError("Model name is None")
