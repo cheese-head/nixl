@@ -411,11 +411,7 @@ std::vector<std::vector<xferBenchIOV>> xferBenchNixlWorker::allocateMemory(int n
         bool is_gds = XFERBENCH_BACKEND_GDS == xferBenchConfig::backend;
         remote_fds = createFileFds(getName(), is_gds);
         if (remote_fds.empty()) {
-            if (is_gds) {
-                std::cerr << "Failed to create GDS file" << std::endl;
-            } else {
-                std::cerr << "Failed to create POSIX file" << std::endl;
-            }
+            std::cerr << "Failed to create " << ((is_gds) ? "GDS" : "POSIX") << " file" << std::endl;
             exit(EXIT_FAILURE);
         }
         for (int list_idx = 0; list_idx < num_lists; list_idx++) {
