@@ -37,6 +37,8 @@ class NIXLBench:
         etcd_endpoints="http://localhost:2379",
         storage_enable_direct=False,
         gds_filepath="",
+        gds_batch_pool_size=32,
+        gds_batch_limit=128,
         initiator_seg_type="DRAM",
         max_batch_size=None,
         max_block_size=None,
@@ -71,6 +73,8 @@ class NIXLBench:
             etcd_endpoints (str, optional): ETCD endpoints for runtime. Defaults to "http://localhost:2379".
             storage_enable_direct (bool, optional): Whether to enable direct I/O for storage operations. Defaults to False.
             gds_filepath (str, optional): Path for GDS file. Defaults to "".
+            gds_batch_pool_size (int, optional): Batch pool size for GDS operations. Defaults to 32.
+            gds_batch_limit (int, optional): Batch limit for GDS operations. Defaults to 128.
             initiator_seg_type (str, optional): Type of initiator segment. Defaults to "DRAM".
             max_batch_size (int, optional): Maximum batch size for testing. Defaults to model_config value.
             max_block_size (int, optional): Maximum block size for testing. Defaults to tp_size * isl.
@@ -101,6 +105,8 @@ class NIXLBench:
         self.etcd_endpoints = etcd_endpoints
         self.storage_enable_direct = storage_enable_direct
         self.gds_filepath = gds_filepath
+        self.gds_batch_pool_size = gds_batch_pool_size
+        self.gds_batch_limit = gds_batch_limit
         self.initiator_seg_type = initiator_seg_type
         self.max_batch_size = max_batch_size
         self.max_block_size = max_block_size
@@ -191,6 +197,8 @@ class NIXLBench:
             "etcd_endpoints": self.etcd_endpoints,
             "storage_enable_direct": self.storage_enable_direct,
             "gds_filepath": self.gds_filepath,
+            "gds_batch_pool_size": self.gds_batch_pool_size,
+            "gds_batch_limit": self.gds_batch_limit,
             "initiator_seg_type": self.initiator_seg_type,
             "max_batch_size": self.max_batch_size,
             "max_block_size": self.max_block_size,
@@ -232,6 +240,8 @@ class NIXLBench:
             "etcd_endpoints": "http://localhost:2379",
             "storage_enable_direct": False,
             "gds_filepath": "",
+            "gds_batch_pool_size": 32,
+            "gds_batch_limit": 128,
             "initiator_seg_type": "DRAM",
             "max_batch_size": 1,  # ios per gpu
             "max_block_size": 67108864,  # io size

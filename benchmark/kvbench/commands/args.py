@@ -157,6 +157,18 @@ def add_nixl_bench_args(subparser: argparse.ArgumentParser):
         "--gds_filepath", type=str, help="(File path for GDS operations"
     )
     subparser.add_argument(
+        "--gds_batch_pool_size", 
+        type=int,
+        default=32,
+        help="Batch pool size for GDS operations (default: 32, only used with GDS backend)"
+    )
+    subparser.add_argument(
+        "--gds_batch_limit", 
+        type=int,
+        default=128,
+        help="Batch limit for GDS operations (default: 128, only used with GDS backend)"
+    )
+    subparser.add_argument(
         "--posix_filepath",
         type=str,
         help="POSIX filepath (default: '')",
