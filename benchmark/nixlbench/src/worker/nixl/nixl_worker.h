@@ -28,6 +28,20 @@
 #include <nixl.h>
 #include "utils/utils.h"
 #include "worker/worker.h"
+#include <array>
+#include "runtime/etcd/etcd_rt.h"
+
+struct LatencyResult {
+    double total_duration;
+    double min_latency;
+    double median_latency;
+    double p95_latency;
+    double p99_latency;
+    
+    LatencyResult(double total, double min, double med, double p95, double p99)
+        : total_duration(total), min_latency(min), median_latency(med), 
+          p95_latency(p95), p99_latency(p99) {}
+};
 
 class xferBenchNixlWorker: public xferBenchWorker {
     private:
@@ -36,6 +50,15 @@ class xferBenchNixlWorker: public xferBenchWorker {
         nixl_mem_t seg_type;
         std::vector<int> remote_fds;
         std::vector<std::vector<xferBenchIOV>> remote_iovs;
+        
+        static thread_local double s_last_min_latency;
+        static thread_local double s_last_max_latency;
+        static thread_local double s_last_median_latency;
+        static thread_local double s_last_p95_latency;
+        static thread_local double s_last_p99_latency;
+        static thread_local double s_last_avg_latency;
+        static thread_local double s_last_total_duration;
+        static thread_local size_t s_last_num_operations;
     public:
         xferBenchNixlWorker(int *argc, char ***argv, std::vector<std::string> devices);
         ~xferBenchNixlWorker();  // Custom destructor to clean up resources
@@ -55,6 +78,10 @@ class xferBenchNixlWorker: public xferBenchWorker {
         std::variant<double, int> transfer(size_t block_size,
                                            const std::vector<std::vector<xferBenchIOV>> &local_iov_lists,
                                            const std::vector<std::vector<xferBenchIOV>> &remote_iov_lists) override;
+
+       
+        void getLastLatencyStats(double& min_lat, double& med_lat, double& max_lat, double& p95_lat, 
+                                 double& p99_lat, double& avg_lat, double& total_dur, size_t& num_ops);
 
     private:
         std::optional<xferBenchIOV> initBasicDescDram(size_t buffer_size, int mem_dev_id);

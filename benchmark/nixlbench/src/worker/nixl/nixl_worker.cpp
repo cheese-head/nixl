@@ -31,6 +31,10 @@
 #include <sys/time.h>
 #include <utils/serdes/serdes.h>
 #include <omp.h>
+#include <chrono>
+#include <algorithm>
+#include <numeric>
+#include <cmath>
 
 #define USE_VMM 0
 #define ROUND_UP(value, granularity) ((((value) + (granularity) - 1) / (granularity)) * (granularity))
@@ -79,6 +83,15 @@ static CUmemGenericAllocationHandle __attribute__((unused)) handle;
         }                                                                         \
         _seg_type;                                                                \
     })
+
+thread_local double xferBenchNixlWorker::s_last_min_latency = 0.0;
+thread_local double xferBenchNixlWorker::s_last_max_latency = 0.0;
+thread_local double xferBenchNixlWorker::s_last_median_latency = 0.0;
+thread_local double xferBenchNixlWorker::s_last_p95_latency = 0.0;
+thread_local double xferBenchNixlWorker::s_last_p99_latency = 0.0;
+thread_local double xferBenchNixlWorker::s_last_avg_latency = 0.0;
+thread_local double xferBenchNixlWorker::s_last_total_duration = 0.0;
+thread_local size_t xferBenchNixlWorker::s_last_num_operations = 0;
 
 xferBenchNixlWorker::xferBenchNixlWorker(int *argc, char ***argv, std::vector<std::string> devices) : xferBenchWorker(argc, argv) {
     seg_type = GET_SEG_TYPE(isInitiator());
@@ -638,9 +651,11 @@ static int execTransfer(nixlAgent *agent,
                         const std::vector<std::vector<xferBenchIOV>> &remote_iovs,
                         const nixl_xfer_op_t op,
                         const int num_iter,
-                        const int num_threads)
+                        const int num_threads,
+                        std::vector<double> &latencies)
 {
     int ret = 0;
+    std::vector<std::vector<double>> thread_latencies(num_threads);
 
     #pragma omp parallel num_threads(num_threads)
     {
@@ -680,12 +695,18 @@ static int execTransfer(nixlAgent *agent,
         CHECK_NIXL_ERROR(agent->createXferReq(op, local_desc, remote_desc, target,
                                             req, &params), "createTransferReq failed");
 
+        std::vector<double> local_latencies;
+        local_latencies.reserve(num_iter);
+
         for (int i = 0; i < num_iter && !error; i++) {
+            auto start_time = std::chrono::high_resolution_clock::now();
+
             rc = agent->postXferReq(req);
             if (NIXL_ERR_BACKEND == rc) {
                 std::cout << "NIXL postRequest failed" << std::endl;
                 error = true;
             } else {
+                // Wait for completion
                 do {
                     /* XXX agent isn't const because the getXferStatus() is not const  */
                     rc = agent->getXferStatus(req);
@@ -696,6 +717,11 @@ static int execTransfer(nixlAgent *agent,
                     }
                 } while (NIXL_SUCCESS != rc);
             }
+            
+            auto end_time = std::chrono::high_resolution_clock::now();            
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+            double latency_us = duration / 1000.0; // Convert to microseconds
+            local_latencies.push_back(latency_us);
         }
 
         agent->releaseXferReq(req);
@@ -703,9 +729,71 @@ static int execTransfer(nixlAgent *agent,
             std::cout << "NIXL releaseXferReq failed" << std::endl;
             ret = -1;
         }
+        thread_latencies[tid] = std::move(local_latencies);
+    }
+    
+    for (const auto& thread_lat : thread_latencies) {
+        latencies.insert(latencies.end(), thread_lat.begin(), thread_lat.end());
     }
 
     return ret;
+}
+
+struct LatencyStats {
+    double min;
+    double max;
+    double avg;
+    double median;
+    double p90;
+    double p95;
+    double p99;
+    double std_dev;
+    double total_duration;
+};
+
+static LatencyStats calculateLatencyStats(const std::vector<double>& latencies) {
+    LatencyStats stats = {0};
+    
+    if (latencies.empty()) {
+        return stats;
+    }
+    
+    std::vector<double> sorted_latencies = latencies;
+    std::sort(sorted_latencies.begin(), sorted_latencies.end());
+    
+    double sum = 0.0;
+    int count = 0;
+    for (double lat : latencies) {
+        sum += lat;
+        count++;
+    }
+
+    size_t median_idx = sorted_latencies.size() / 2;
+    size_t p90_idx = sorted_latencies.size() * 90 / 100;
+    size_t p95_idx = sorted_latencies.size() * 95 / 100;
+    size_t p99_idx = sorted_latencies.size() * 99 / 100;
+    
+    median_idx = std::min(median_idx, sorted_latencies.size() - 1);
+    p90_idx = std::min(p90_idx, sorted_latencies.size() - 1);
+    p95_idx = std::min(p95_idx, sorted_latencies.size() - 1);
+    p99_idx = std::min(p99_idx, sorted_latencies.size() - 1);
+    
+    stats.min = sorted_latencies.front();
+    stats.max = sorted_latencies.back();
+    stats.total_duration = sum;
+    stats.avg = sum / count;
+    stats.median = sorted_latencies[median_idx];
+    stats.p90 = sorted_latencies[p90_idx];
+    stats.p95 = sorted_latencies[p95_idx];
+    stats.p99 = sorted_latencies[p99_idx];
+    
+    double variance = 0.0;
+    for (double lat : sorted_latencies) {
+        variance += (lat - stats.avg) * (lat - stats.avg);
+    }
+    stats.std_dev = std::sqrt(variance / sorted_latencies.size());
+    
+    return stats;
 }
 
 std::variant<double, int> xferBenchNixlWorker::transfer(size_t block_size,
@@ -713,11 +801,9 @@ std::variant<double, int> xferBenchNixlWorker::transfer(size_t block_size,
                                                const std::vector<std::vector<xferBenchIOV>> &remote_iovs) {
     int num_iter = xferBenchConfig::num_iter / xferBenchConfig::num_threads;
     int skip = xferBenchConfig::warmup_iter / xferBenchConfig::num_threads;
-    struct timeval t_start, t_end;
-    double total_duration = 0.0;
     int ret = 0;
     nixl_xfer_op_t xfer_op = XFERBENCH_OP_READ == xferBenchConfig::op_type ? NIXL_READ : NIXL_WRITE;
-    // int completion_flag = 1;
+    std::vector<double> latencies;
 
     // Reduce skip by 10x for large block sizes
     if (block_size > LARGE_BLOCK_SIZE) {
@@ -725,23 +811,51 @@ std::variant<double, int> xferBenchNixlWorker::transfer(size_t block_size,
         num_iter /= LARGE_BLOCK_SIZE_ITER_FACTOR;
     }
 
-    ret = execTransfer(agent, local_iovs, remote_iovs, xfer_op, skip, xferBenchConfig::num_threads);
+    // Warmup phase - no latency collection
+    std::vector<double> warmup_latencies;
+    ret = execTransfer(agent, local_iovs, remote_iovs, xfer_op, skip, xferBenchConfig::num_threads, warmup_latencies);
     if (ret < 0) {
         return std::variant<double, int>(ret);
     }
 
     // Synchronize to ensure all processes have completed the warmup (iter and polling)
     synchronize();
+    
+    latencies.reserve(num_iter * xferBenchConfig::num_threads);
 
-    gettimeofday(&t_start, nullptr);
+    ret = execTransfer(agent, local_iovs, remote_iovs, xfer_op, num_iter, xferBenchConfig::num_threads, latencies);
+    if (ret < 0) {
+        return std::variant<double, int>(ret);
+    }
 
-    ret = execTransfer(agent, local_iovs, remote_iovs, xfer_op, num_iter, xferBenchConfig::num_threads);
+    LatencyStats stats = calculateLatencyStats(latencies);
 
-    gettimeofday(&t_end, nullptr);
-    total_duration += (((t_end.tv_sec - t_start.tv_sec) * 1e6) +
-                       (t_end.tv_usec - t_start.tv_usec)); // In us
+    if (ret < 0) {
+        return std::variant<double, int>(ret);
+    } else {
+        s_last_min_latency = stats.min;
+        s_last_max_latency = stats.max;
+        s_last_median_latency = stats.median;
+        s_last_p95_latency = stats.p95;
+        s_last_p99_latency = stats.p99;
+        s_last_avg_latency = stats.avg;
+        s_last_total_duration = stats.total_duration;
+        s_last_num_operations = latencies.size();
+        return std::variant<double, int>(stats.total_duration);
+    }
+}
 
-    return ret < 0 ? std::variant<double, int>(ret) : std::variant<double, int>(total_duration);
+void xferBenchNixlWorker::getLastLatencyStats(double& min_lat, double& med_lat, double& max_lat, double& p95_lat, 
+                                             double& p99_lat, double& avg_lat, 
+                                             double& total_dur, size_t& num_ops) {
+    min_lat = s_last_min_latency;
+    med_lat = s_last_median_latency;
+    max_lat = s_last_max_latency;
+    p95_lat = s_last_p95_latency;
+    p99_lat = s_last_p99_latency;
+    avg_lat = s_last_avg_latency;
+    total_dur = s_last_total_duration;
+    num_ops = s_last_num_operations;
 }
 
 void xferBenchNixlWorker::poll(size_t block_size) {

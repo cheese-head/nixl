@@ -17,7 +17,7 @@ import argparse
 
 
 def add_common_args(subparser: argparse.ArgumentParser):
-    subparser.add_argument("--model", type=str, help="Model name (e.g., 'llama3.1-8b')")
+    subparser.add_argument("--model", type=str, help="Path to a model architecture YAML file")
     subparser.add_argument(
         "--model_config", type=str, help="Path to a single model config YAML file"
     )
@@ -34,6 +34,9 @@ def add_cli_args(subparser: argparse.ArgumentParser):
     subparser.add_argument("--isl", type=int, help="Input sequence length")
     subparser.add_argument("--osl", type=int, help="Output sequence length")
     subparser.add_argument("--num_requests", type=int, help="Number of requests")
+    subparser.add_argument("--increasing_requests", action="store_true", help="Run benchmark with increasing number of requests from 1 to 250")
+    subparser.add_argument("--max_requests", type=int, default=250, help="Maximum number of requests when using --increasing_requests (default: 250)")
+    subparser.add_argument("--step_size", type=int, default=1, help="Step size between request numbers when using --increasing_requests (default: 1)")
     subparser.add_argument("--page_size", type=int, help="Page size")
     subparser.add_argument("--access_pattern", type=str, help="Access pattern")
 
@@ -153,3 +156,19 @@ def add_nixl_bench_args(subparser: argparse.ArgumentParser):
     subparser.add_argument(
         "--gds_filepath", type=str, help="(File path for GDS operations"
     )
+    subparser.add_argument(
+        "--posix_filepath",
+        type=str,
+        help="POSIX filepath (default: '')",
+    )
+    subparser.add_argument(
+        "--posix_api_type",
+        type=str,
+        help="POSIX API type [AIO, O_DIRECT] (default: AIO)",
+    )
+    subparser.add_argument(
+        "--num_files",
+        type=int,
+        help="Number of files (default: 1)",
+    )
+    

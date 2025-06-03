@@ -41,11 +41,14 @@ class NIXLBench:
         max_batch_size=None,
         max_block_size=None,
         mode="SG",
+        num_files=1,
         num_initiator_dev=1,
         num_iter=1000,
         num_target_dev=1,
         num_threads=1,
         op_type="WRITE",
+        posix_api_type="AIO",
+        posix_filepath="",
         runtime_type="ETCD",
         scheme="pairwise",
         start_batch_size=None,
@@ -72,11 +75,14 @@ class NIXLBench:
             max_batch_size (int, optional): Maximum batch size for testing. Defaults to model_config value.
             max_block_size (int, optional): Maximum block size for testing. Defaults to tp_size * isl.
             mode (str, optional): Benchmarking mode. Defaults to "SG".
+            num_files (int, optional): Number of files. Defaults to 1.
             num_initiator_dev (int, optional): Number of initiator devices. Defaults to 1.
             num_iter (int, optional): Number of iterations. Defaults to 1000.
             num_target_dev (int, optional): Number of target devices. Defaults to 1.
             num_threads (int, optional): Number of threads. Defaults to 1.
             op_type (str, optional): Operation type. Defaults to "WRITE".
+            posix_api_type (str, optional): POSIX API type. Defaults to "AIO".
+            posix_filepath (str, optional): POSIX filepath. Defaults to "".
             runtime_type (str, optional): Runtime type. Defaults to "ETCD".
             scheme (str, optional): Communication scheme. Defaults to "pairwise".
             start_batch_size (int, optional): Starting batch size. Defaults to 1.
@@ -99,11 +105,14 @@ class NIXLBench:
         self.max_batch_size = max_batch_size
         self.max_block_size = max_block_size
         self.mode = mode
+        self.num_files = num_files
         self.num_initiator_dev = num_initiator_dev
         self.num_iter = num_iter
         self.num_target_dev = num_target_dev
         self.num_threads = num_threads
         self.op_type = op_type
+        self.posix_api_type = posix_api_type
+        self.posix_filepath = posix_filepath
         self.runtime_type = runtime_type
         self.scheme = scheme
         self.start_batch_size = start_batch_size
@@ -119,7 +128,7 @@ class NIXLBench:
         self.max_block_size = io_size
 
     def configure_segment_type(self, backend: str, source: str, destination: str):
-        if backend == "GDS":
+        if backend == "GDS" or backend == "POSIX":
             if source == "file":
                 # this is a READ from GDS to GPU
                 self.op_type = "READ"
@@ -186,11 +195,14 @@ class NIXLBench:
             "max_batch_size": self.max_batch_size,
             "max_block_size": self.max_block_size,
             "mode": self.mode,
+            "num_files": self.num_files,
             "num_initiator_dev": self.num_initiator_dev,
             "num_iter": self.num_iter,
             "num_target_dev": self.num_target_dev,
             "num_threads": self.num_threads,
             "op_type": self.op_type,
+            "posix_api_type": self.posix_api_type,
+            "posix_filepath": self.posix_filepath,
             "runtime_type": self.runtime_type,
             "scheme": self.scheme,
             "start_batch_size": self.start_batch_size,
@@ -224,11 +236,14 @@ class NIXLBench:
             "max_batch_size": 1,  # ios per gpu
             "max_block_size": 67108864,  # io size
             "mode": "SG",
+            "num_files": 1,
             "num_initiator_dev": 1,
             "num_iter": 1000,
             "num_target_dev": 1,
             "num_threads": 1,
             "op_type": "WRITE",
+            "posix_api_type": "AIO",
+            "posix_filepath": "",
             "runtime_type": "ETCD",
             "scheme": "pairwise",
             "start_batch_size": 1,
