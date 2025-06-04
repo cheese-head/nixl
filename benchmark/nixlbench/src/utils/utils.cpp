@@ -464,8 +464,9 @@ void xferBenchUtils::printStatsHeader() {
               << std::setw(15) << "Median"
               << std::setw(15) << "P95"
               << std::setw(15) << "P99"
+              << std::setw(15) << "Throughput"
               << std::endl;
-    std::cout << std::string(120, '-') << std::endl;
+    std::cout << std::string(130, '-') << std::endl;
 }
 
 void xferBenchUtils::printStats(bool is_target, 
@@ -500,16 +501,20 @@ void xferBenchUtils::printStats(bool is_target,
 
     size_t operations_count = (actual_operations > 0) ? actual_operations : (num_iter * batch_size);
     
-    total_data_transferred = (block_size * batch_size) * (operations_count / batch_size); // In Bytes
-         
+    total_data_transferred = (block_size * batch_size) * (operations_count); // In Bytes
     
     if (IS_PAIRWISE_AND_MG()) {
         total_data_transferred *= xferBenchConfig::num_initiator_dev; // In Bytes
         avg_latency /= xferBenchConfig::num_initiator_dev; // In microsec
     }
 
-    throughput_gb = (((double) total_data_transferred / (1000 * 1000 * 1000)) /
-                   (total_duration / 1e6));   // In GB/Sec
+    // Calculate throughput in GB/s using max latency for peak performance
+    // Convert bytes to gigabytes (using 1024^3) and microseconds to seconds
+    const double bytes_to_gb = 1.0 / (1024.0 * 1024.0 * 1024.0);
+    const double us_to_s = 1.0 / 1000000.0;
+    // Calculate throughput based on block size and max latency
+    double bytes_per_op = block_size * batch_size;
+    throughput_gb = (bytes_per_op * bytes_to_gb) / (max_latency * us_to_s);
 
     if (IS_PAIRWISE_AND_SG() && rt->getSize() > 2) {
         rt->reduceSumDouble(&throughput_gb, &totalbw, 0);
@@ -521,6 +526,7 @@ void xferBenchUtils::printStats(bool is_target,
         return;
     }
 
+    
     auto formatTime = [](double time_us) -> std::string {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(2);
@@ -545,5 +551,6 @@ void xferBenchUtils::printStats(bool is_target,
               << std::setw(15) << formatTime(median_latency)
               << std::setw(15) << formatTime(p95_latency)
               << std::setw(15) << formatTime(p99_latency)
+              << std::fixed << std::setprecision(2) << throughput_gb << " GB/s"
               << std::endl;
 }
