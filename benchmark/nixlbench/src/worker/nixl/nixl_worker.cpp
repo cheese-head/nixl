@@ -446,19 +446,8 @@ std::optional<xferBenchIOV> xferBenchNixlWorker::initDirectIODescFile(size_t buf
         return std::nullopt;
     }
 
-    // For direct I/O, we store the buffer for later use but still use file offset as address
-    // Ensure we have a place to store the buffer
-    // while (direct_io_buffers.size() <= static_cast<size_t>(mem_dev_id)) {
-    //     direct_io_buffers.push_back(std::vector<void*>());
-    // }
-    
-    // Store the buffer for later cleanup
-    // direct_io_buffers[static_cast<size_t>(mem_dev_id)].push_back(buf);
-    
-    // Use file offset (gds_running_ptr) as the address, not the buffer pointer
     uintptr_t addr = static_cast<uintptr_t>(gds_running_ptr);
-        
-    // Update the running pointer for the next operation
+
     gds_running_ptr += buffer_size;
     
     return std::optional<xferBenchIOV>(std::in_place, addr, buffer_size, fd);
