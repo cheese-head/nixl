@@ -852,16 +852,7 @@ static int execTransfer(nixlAgent *agent,
                 std::cout << "NIXL postRequest failed" << std::endl;
                 error = true;
             } else {
-                // Wait for completion with timeout and retry mechanism
-                // int retry_count = 0;
-                // const int max_retries = 10; // Maximum number of retries before giving up
-                // const int timeout_ms = 1000; // Timeout in milliseconds for each status check
-
-                // auto status_start_time = std::chrono::high_resolution_clock::now();
-                // bool completed = false;
-
                 do {
-                    /* XXX agent isn't const because the getXferStatus() is not const  */
                     rc = agent->getXferStatus(req);
                     if (NIXL_ERR_BACKEND == rc) {
                         std::cout << "NIXL getStatus failed" << std::endl;
@@ -869,45 +860,6 @@ static int execTransfer(nixlAgent *agent,
                         break;
                     }
                 } while (NIXL_SUCCESS != rc);
-
-
-                // while (!completed && retry_count < max_retries) {
-                //     rc = agent->getXferStatus(req);
-                    
-                //     if (NIXL_SUCCESS == rc) {
-                //         // Transfer completed successfully
-                //         completed = true;
-                //     } else if (NIXL_IN_PROG == rc) {
-                //         // Transfer still in progress, check if we've been waiting too long
-                //         auto current_time = std::chrono::high_resolution_clock::now();
-                //         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                //             current_time - status_start_time).count();
-                        
-                //         if (elapsed > timeout_ms) {
-                //             // Timeout for this status check, increment retry counter
-                //             retry_count++;
-                //             status_start_time = current_time; // Reset timer for next retry
-                //         }
-                        
-                //         // Small sleep to avoid busy waiting
-                //         struct timespec ts = {0, 1000000}; // 1 millisecond
-                //         nanosleep(&ts, NULL);
-                //     } else if (NIXL_ERR_BACKEND == rc) {
-                //         // Fatal error
-                //         std::cout << "NIXL getStatus failed with backend error" << std::endl;
-                //         error = true;
-                //         break;
-                //     } else {
-                //         // Other error, retry
-                //         std::cout << "NIXL getStatus returned unexpected status: " << rc << std::endl;
-                //         retry_count++;
-                //     }
-                // }
-
-                // if (!completed && !error) {
-                //     std::cout << "NIXL transfer timed out after " << max_retries << " retries" << std::endl;
-                //     error = true;
-                // }
             }
             
             auto end_time = std::chrono::high_resolution_clock::now();            

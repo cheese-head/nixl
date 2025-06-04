@@ -133,24 +133,54 @@ class NIXLBench:
         self.start_block_size = io_size
         self.max_block_size = io_size
 
-    def configure_segment_type(self, backend: str, source: str, destination: str):
-        if backend == "GDS" or backend == "POSIX":
-            if source == "file":
-                # this is a READ from GDS to GPU
-                self.op_type = "READ"
-                self.target_seg_type = "VRAM"
-            elif source == "gpu":
-                # this is a WRITE from GPU to GDS
-                self.op_type = "WRITE"
-                self.target_seg_type = "VRAM"
 
-            elif source == "memory":
-                # this is a WRITE from memory to GDS
-                self.op_type = "WRITE"
-                self.initiator_seg_type = "DRAM"
-                self.target_seg_type = "DRAM"
+    def _configure_gds(self, source: str, destination: str):
+        if source == "file":
+            # this is a READ from GDS to GPU
+            self.op_type = "READ"
+            self.target_seg_type = "VRAM"
+        elif source == "gpu":
+            # this is a WRITE from GPU to GDS
+            self.op_type = "WRITE"
+            self.target_seg_type = "VRAM"
+        else: 
+            raise ValueError(f"Invalid source for GDS: {source}")
+        
+    def _configure_posix(self, source: str, destination: str):
+        if source == "file": 
+            self.op_type = "READ"
+            self.target_seg_type = "DRAM"
+        elif source == "memory":
+            self.op_type = "WRITE"
+            self.initiator_seg_type = "DRAM"
+        else:
+            raise ValueError(f"Invalid source for POSIX: {source}")
+
+    def configure_segment_type(self, backend: str, source: str, destination: str):
+        if backend.lower() == "gds":
+            self._configure_gds(source, destination)
+        elif backend.lower() == "posix":
+            self._configure_posix(source, destination)
         else:
             raise ValueError(f"Invalid backend: {backend}")
+
+        # if backend == "GDS" or backend == "POSIX":
+        #     if source == "file":
+        #         # this is a READ from GDS to GPU
+        #         self.op_type = "READ"
+        #         self.target_seg_type = "VRAM"
+        #     elif source == "gpu":
+        #         # this is a WRITE from GPU to GDS
+        #         self.op_type = "WRITE"
+        #         self.target_seg_type = "VRAM"
+
+        #     elif source == "memory":
+        #         # this is a WRITE from memory to GDS
+        #         self.op_type = "WRITE"
+        #         self.initiator_seg_type = "DRAM"
+        #         self.target_seg_type = "DRAM"
+        # else:
+        #     raise ValueError(f"Invalid backend: {backend}")
 
     def configure_scheme(self, scheme: str = "pairwise", direction: str = "isl"):
         """
@@ -166,6 +196,10 @@ class NIXLBench:
                 self.num_target_dev = 1
 
     def set_batch_size(self, batch_size: int):
+        """
+        Set the batch size for benchmarking.
+        """
+
         self.start_batch_size = batch_size
         self.max_batch_size = batch_size
 

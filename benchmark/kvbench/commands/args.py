@@ -58,6 +58,11 @@ def add_nixl_bench_args(subparser: argparse.ArgumentParser):
         help="Source of the nixl descriptors [file, memory, gpu] (default: file)",
     )
     subparser.add_argument(
+        "--single_agent_view",
+        action="store_true",
+        help="When enabled, batch sizes represent what a single NIXL agent would see rather than the total across all agents",
+    )
+    subparser.add_argument(
         "--destination",
         default="memory",
         type=str,
@@ -149,9 +154,8 @@ def add_nixl_bench_args(subparser: argparse.ArgumentParser):
     )
     subparser.add_argument(
         "--storage_enable_direct",
-        type=bool,
+        action="store_true",
         help="Enable direct I/O for storage operations (only used with POSIX backend)",
-        default=False,
     )
     subparser.add_argument(
         "--gds_filepath", type=str, help="(File path for GDS operations"

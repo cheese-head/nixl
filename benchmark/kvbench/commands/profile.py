@@ -102,12 +102,10 @@ class Command:
             
             # Run benchmark with increasing number of requests using step size
             for num_requests in range(1, max_requests + 1, step_size):
-                print(f"\nRunning benchmark with {num_requests} requests:")
                 model_config.runtime.num_requests = num_requests
-                
                 nixl_bench = NIXLBench(model, model_config, **filtered_args)
                 io_size = model.get_io_size(model_config.system.page_size)
-                batch_size = get_batch_size(model, model_config, io_size)
+                batch_size = get_batch_size(model, model_config, io_size, single_agent_view=args.single_agent_view)
                 nixl_bench.set_io_size(io_size)
                 nixl_bench.set_batch_size(batch_size)
                 nixl_bench.configure_buffer_size()
@@ -121,7 +119,7 @@ class Command:
         else:
             nixl_bench = NIXLBench(model, model_config, **filtered_args)
             io_size = model.get_io_size(model_config.system.page_size)
-            batch_size = get_batch_size(model, model_config, io_size)
+            batch_size = get_batch_size(model, model_config, io_size, single_agent_view=args.single_agent_view)
             nixl_bench.set_io_size(io_size)
             nixl_bench.set_batch_size(batch_size)
             nixl_bench.configure_buffer_size()
