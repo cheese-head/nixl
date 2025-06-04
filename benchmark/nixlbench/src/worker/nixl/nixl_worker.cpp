@@ -932,9 +932,6 @@ static int execTransfer(nixlAgent *agent,
     for (const auto& thread_lat : thread_latencies) {
         latencies.insert(latencies.end(), thread_lat.begin(), thread_lat.end());
     }
-    for (const auto& thread_lat : latencies) {
-        std::cout << "Latency: " << thread_lat << std::endl;
-    }
 
     return ret;
 }
