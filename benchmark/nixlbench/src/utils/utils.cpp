@@ -205,18 +205,18 @@ int xferBenchConfig::loadFromFlags() {
     }
 
     int partition = (num_threads * LARGE_BLOCK_SIZE_ITER_FACTOR);
-    if (num_iter % partition) {
-        num_iter += partition - (num_iter % partition);
-        std::cout << "WARNING: Adjusting num_iter to " << num_iter
-                  << " to allow equal distribution to " << num_threads << " threads"
-                  << std::endl;
-    }
-    if (warmup_iter % partition) {
-        warmup_iter += partition - (warmup_iter % partition);
-        std::cout << "WARNING: Adjusting warmup_iter to " << warmup_iter
-                  << " to allow equal distribution to " << num_threads << " threads"
-                  << std::endl;
-    }
+    // if (num_iter % partition) {
+    //     num_iter += partition - (num_iter % partition);
+    //     std::cout << "WARNING: Adjusting num_iter to " << num_iter
+    //               << " to allow equal distribution to " << num_threads << " threads"
+    //               << std::endl;
+    // }
+    // if (warmup_iter % partition) {
+    //     warmup_iter += partition - (warmup_iter % partition);
+    //     std::cout << "WARNING: Adjusting warmup_iter to " << warmup_iter
+    //               << " to allow equal distribution to " << num_threads << " threads"
+    //               << std::endl;
+    // }
     partition = (num_initiator_dev * num_threads);
     if (total_buffer_size % partition) {
         std::cerr << "Total_buffer_size must be divisible by the product of num_threads and num_initiator_dev"

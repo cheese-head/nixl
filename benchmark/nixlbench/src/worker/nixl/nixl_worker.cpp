@@ -396,7 +396,7 @@ std::optional<xferBenchIOV> xferBenchNixlWorker::initBasicDescFile(size_t buffer
     }
         
     // Free the temporary buffer - no longer needed
-    free(buf);
+    // free(buf);
     
     // Update the running pointer for the next operation
     gds_running_ptr += buffer_size;
@@ -808,12 +808,12 @@ static int execTransfer(nixlAgent *agent,
         const auto &local_iov = local_iovs[tid];
         const auto &remote_iov = remote_iovs[tid];
 
-        // TODO: fetch local_desc and remote_desc directly from config
         nixl_xfer_dlist_t local_desc(GET_SEG_TYPE(true));
         nixl_xfer_dlist_t remote_desc(GET_SEG_TYPE(false));
 
         if ((XFERBENCH_BACKEND_GDS == xferBenchConfig::backend) ||
             (XFERBENCH_BACKEND_POSIX == xferBenchConfig::backend)) {
+
             remote_desc = nixl_xfer_dlist_t(FILE_SEG);
         }
 
@@ -837,16 +837,15 @@ static int execTransfer(nixlAgent *agent,
             target = "target";
         }
 
-        nixl_opt_args_t xfer_opt_args;
-        CHECK_NIXL_ERROR(agent->createXferReq(op, local_desc, remote_desc, target,
-                                            req, &xfer_opt_args), "createTransferReq failed");
 
         std::vector<double> local_latencies;
+
         local_latencies.reserve(num_iter);
-
         for (int i = 0; i < num_iter && !error; i++) {
-            auto start_time = std::chrono::high_resolution_clock::now();
 
+            CHECK_NIXL_ERROR(agent->createXferReq(op, local_desc, remote_desc, target,
+                                                    req, &params), "createTransferReq failed");
+            auto start_time = std::chrono::high_resolution_clock::now();
             rc = agent->postXferReq(req);
             if (NIXL_ERR_BACKEND == rc) {
                 std::cout << "NIXL postRequest failed" << std::endl;
@@ -861,30 +860,28 @@ static int execTransfer(nixlAgent *agent,
                     }
                 } while (NIXL_SUCCESS != rc);
             }
-            
-            auto end_time = std::chrono::high_resolution_clock::now();            
+
+            auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
             double latency_us = duration / 1000.0; // Convert to microseconds
             local_latencies.push_back(latency_us);
+            nixl_status_t release_rc = agent->releaseXferReq(req);
+            if (NIXL_SUCCESS != release_rc) {
+                std::cerr << "Warning: Failed to release transfer request" << std::endl;
+            }
         }
+
 
         if (error) {
             std::cout << "NIXL transfer operations failed, cleaning up" << std::endl;
             ret = -1;
         }
-
-        nixl_status_t release_rc = agent->releaseXferReq(req);
-        if (NIXL_SUCCESS != release_rc) {
-            std::cerr << "Warning: Failed to release transfer request" << std::endl;
-        }
-        
         thread_latencies[tid] = std::move(local_latencies);
     }
     
     for (const auto& thread_lat : thread_latencies) {
         latencies.insert(latencies.end(), thread_lat.begin(), thread_lat.end());
     }
-
     return ret;
 }
 
@@ -960,7 +957,6 @@ std::variant<double, int> xferBenchNixlWorker::transfer(size_t block_size,
         num_iter /= LARGE_BLOCK_SIZE_ITER_FACTOR;
     }
 
-    // Warmup phase - no latency collection
     std::vector<double> warmup_latencies;
     ret = execTransfer(agent, local_iovs, remote_iovs, xfer_op, skip, xferBenchConfig::num_threads, warmup_latencies);
     if (ret < 0) {
@@ -976,7 +972,6 @@ std::variant<double, int> xferBenchNixlWorker::transfer(size_t block_size,
     if (ret < 0) {
         return std::variant<double, int>(ret);
     }
-
     LatencyStats stats = calculateLatencyStats(latencies);
 
     if (ret < 0) {
