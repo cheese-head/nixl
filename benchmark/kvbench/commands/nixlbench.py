@@ -136,7 +136,6 @@ class NIXLBench:
         self.start_block_size = io_size
         self.max_block_size = io_size
 
-
     def _configure_gds(self, source: str, destination: str):
         if source == "file":
             # this is a READ from GDS to GPU
