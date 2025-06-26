@@ -155,7 +155,7 @@ def nixl_bench_args(func):
     )(func)
     func = click.option(
         "--storage_enable_direct",
-        type=bool,
+        action="store_true",
         help="Enable direct I/O for storage operations (only used with POSIX backend)",
         default=False,
     )(func)
