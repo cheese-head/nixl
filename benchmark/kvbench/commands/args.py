@@ -17,7 +17,9 @@ import argparse
 
 
 def add_common_args(subparser: argparse.ArgumentParser):
-    subparser.add_argument("--model", type=str, help="Path to a model architecture YAML file")
+    subparser.add_argument(
+        "--model", type=str, help="Path to a model architecture YAML file"
+    )
     subparser.add_argument(
         "--model_config", type=str, help="Path to a single model config YAML file"
     )
@@ -161,13 +163,13 @@ def add_nixl_bench_args(subparser: argparse.ArgumentParser):
         "--gds_batch_pool_size",
         type=int,
         default=32,
-        help="Batch pool size for GDS operations (default: 32, only used with GDS backend)"
+        help="Batch pool size for GDS operations (default: 32, only used with GDS backend)",
     )
     subparser.add_argument(
         "--gds_batch_limit",
         type=int,
         default=128,
-        help="Batch limit for GDS operations (default: 128, only used with GDS backend)"
+        help="Batch limit for GDS operations (default: 128, only used with GDS backend)",
     )
     subparser.add_argument(
         "--posix_filepath",
@@ -184,4 +186,3 @@ def add_nixl_bench_args(subparser: argparse.ArgumentParser):
         type=int,
         help="Number of files (default: 1)",
     )
-    
