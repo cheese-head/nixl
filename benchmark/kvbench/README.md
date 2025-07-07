@@ -141,8 +141,8 @@ These arguments are used by both `plan` and `profile` commands:
 | `--device_list` | Comma-separated device names (default: all) |
 | `--runtime_type` | Type of runtime to use [ETCD] (default: ETCD) |
 | `--etcd-endpoints` | ETCD server URL for coordination (default: http://localhost:2379) |
-| `--storage_enable_direct` | Enable direct I/O for GDS operations |
-| `--gds_filepath` | File path for GDS operations |
+| `--storage_enable_direct` | Enable direct I/O for storage operations |
+| `--filepath` | File path for storage operations |
 | `--enable_vmm` | Enable VMM memory allocation when DRAM is requested |
 
 ### CTP Command Arguments
@@ -165,7 +165,7 @@ Specific to CTP (Custom Traffic Performance) commands:
 The `plan` command generates and displays recommended `nixlbench` command configurations based on your model architecture and parameters. It helps you prepare optimal benchmark settings without running the benchmark itself.
 
 ```bash
-python main.py plan --model ./examples/model_deepseek_r1.yaml --model_config "./examples/block-tp1-pp8.yaml"
+python main.py plan --model ./examples/model_deepseek_r1.yaml --model_config "./examples/block-tp1-pp8.yaml" --backend POSIX
 ```
 
 #### Profile Command
@@ -173,7 +173,7 @@ python main.py plan --model ./examples/model_deepseek_r1.yaml --model_config "./
 The `profile` command actually runs the benchmark with the specified configuration using `nixlbench`, collecting performance data across various KV cache operations and access patterns.
 
 ```bash
-python main.py profile --model ./examples/model_deepseek_r1.yaml --model_config "./examples/block-tp1-pp8.yaml"
+python main.py profile --model ./examples/model_deepseek_r1.yaml --model_config "./examples/block-tp1-pp8.yaml" --backend POSIX
 ```
 
 #### KVCache Command
