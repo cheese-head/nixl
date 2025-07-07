@@ -31,6 +31,7 @@ from models.model_config import ModelConfig
 from models.models import BaseModelArch
 from models.utils import get_batch_size, override_yaml_args
 
+
 def parse_size(nbytes: str) -> int:
     """Convert formatted string with unit to bytes"""
 
@@ -285,13 +286,23 @@ def kvcache_command(model, model_config, **kwargs):
         "TP",
         "PP",
         "Page Size",
-        "Access"
+        "Access",
     ]
     io_size = model_arch.get_io_size(model_configuration.system.page_size)
     batch_size = get_batch_size(model_arch, model_configuration, io_size)
-    
+
     data = [
-        [model_arch.model_name, model_configuration.runtime.isl, model_configuration.runtime.num_requests, batch_size, format_bytes(io_size), model_configuration.model.tp_size, model_configuration.model.pp_size, model_configuration.system.page_size, model_configuration.system.access_pattern]
+        [
+            model_arch.model_name,
+            model_configuration.runtime.isl,
+            model_configuration.runtime.num_requests,
+            batch_size,
+            format_bytes(io_size),
+            model_configuration.model.tp_size,
+            model_configuration.model.pp_size,
+            model_configuration.system.page_size,
+            model_configuration.system.access_pattern,
+        ]
     ]
     click.echo(tabulate(data, headers=labels, floatfmt=".6f"))
 
@@ -320,6 +331,7 @@ def sequential_ct_perftest(
     """Run sequential custom traffic performance test using patterns defined in YAML config"""
     from test.sequential_custom_traffic_perftest import SequentialCTPerftest
     from test.traffic_pattern import TrafficPattern
+
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
 
@@ -372,6 +384,7 @@ def ct_perftest(config_file, verify_buffers, print_recv_buffers):
     """Run custom traffic performance test using patterns defined in YAML config"""
     from test.custom_traffic_perftest import CTPerftest
     from test.traffic_pattern import TrafficPattern
+
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
 
