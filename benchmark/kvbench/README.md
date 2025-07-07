@@ -69,12 +69,11 @@ Options:
   --help                Show this message and exit.
 
 Commands:
-  ct-perftest            Run custom traffic performance test using patterns...
-  io-size                Display IO size information
-  kvcache                Display kvcache information
-  plan                   Display the recommended configuration for nixlbench
-  profile                Run nixlbench
-  sequential-ct-perftest Run sequential custom traffic performance test...
+  ct-perftest             Run custom traffic performance test using...
+  kvcache                 Display kvcache information
+  plan                    Display the recommended configuration for...
+  profile                 Run nixlbench
+  sequential-ct-perftest  Run sequential custom traffic performance test...
 ```
 
 ## Command Line Arguments
