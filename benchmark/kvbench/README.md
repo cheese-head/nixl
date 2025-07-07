@@ -181,24 +181,10 @@ python main.py profile --model ./examples/model_deepseek_r1.yaml --model_config 
 The `kvcache` command analyzes and displays detailed information about the KV cache for a specified model configuration, including model type, sequence lengths, batch sizes, and I/O sizes.
 
 ```bash
-python main.py kvcache --model ./examples/model_deepseek_r1.yaml --model_config "./examples/block-tp1-pp8.yaml"
-Model                  : DEEPSEEK_R1
-Input Sequence Length  : 10000
-Batch Size             : 298
-IO Size                : 1.12 MB
-```
-
-#### IO-Size Command
-
-The `io-size` command displays information about the I/O size requirements for a specified model configuration, helping you understand memory usage and data transfer needs.
-
-```bash
-python main.py io-size --model ./examples/model_deepseek_r1.yaml --model_config "./examples/block-tp1-pp8.yaml"
-Model: DEEPSEEK_R1
-Page Size: 256.0 B
-Input Sequence Length: 10000
-Batch Size: 298
-IO Size: 1.12 MB
+python main.py kvcache --model ./examples/model_deepseek_r1.yaml --model_config "./examples/block-tp1-pp8.yaml" --isl 10000 --page_size 512
+Model          ISL    Num Requests    Batch Size  IO Size      TP    PP    Page Size  Access
+-----------  -----  --------------  ------------  ---------  ----  ----  -----------  --------
+DEEPSEEK_R1  10000              10          1490  2.25 MB       1     8          512  block
 ```
 
 ### CTP Commands
