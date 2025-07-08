@@ -100,6 +100,7 @@ xferBenchNixlWorker::xferBenchNixlWorker(int *argc, char ***argv, std::vector<st
         0 == xferBenchConfig::backend.compare (XFERBENCH_BACKEND_UCX_MO) ||
         0 == xferBenchConfig::backend.compare (XFERBENCH_BACKEND_GPUNETIO) ||
         0 == xferBenchConfig::backend.compare (XFERBENCH_BACKEND_MOONCAKE) ||
+        0 == xferBenchConfig::backend.compare (XFERBENCH_BACKEND_GDS_MT) ||
         xferBenchConfig::isStorageBackend()) {
         backend_name = xferBenchConfig::backend;
     } else {
@@ -161,6 +162,11 @@ xferBenchNixlWorker::xferBenchNixlWorker(int *argc, char ***argv, std::vector<st
     } else if (0 == xferBenchConfig::backend.compare (XFERBENCH_BACKEND_HF3FS)) {
         // Using default param values for HF3FS backend
         std::cout << "HF3FS backend" << std::endl;
+    } else if (0 == xferBenchConfig::backend.compare (XFERBENCH_BACKEND_GDS_MT)) {
+        std::cout << "GDS_MT backend" << std::endl;
+        if (xferBenchConfig::gds_mt_thread_count > 0) {
+            backend_params["thread_count"] = xferBenchConfig::gds_mt_thread_count;
+        }
     } else {
         std::cerr << "Unsupported backend: " << xferBenchConfig::backend << std::endl;
         exit(EXIT_FAILURE);
@@ -697,6 +703,7 @@ static int execTransfer(nixlAgent *agent,
             target = "target";
         }
 
+
         CHECK_NIXL_ERROR(agent->createXferReq(op, local_desc, remote_desc, target,
                                             req, &params), "createTransferReq failed");
 
@@ -717,7 +724,6 @@ static int execTransfer(nixlAgent *agent,
                 } while (NIXL_SUCCESS != rc);
             }
         }
-
         agent->releaseXferReq(req);
         if (error) {
             std::cout << "NIXL releaseXferReq failed" << std::endl;

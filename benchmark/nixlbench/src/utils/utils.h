@@ -67,6 +67,7 @@
 #define XFERBENCH_BACKEND_UCX "UCX"
 #define XFERBENCH_BACKEND_UCX_MO "UCX_MO"
 #define XFERBENCH_BACKEND_GDS "GDS"
+#define XFERBENCH_BACKEND_GDS_MT "GDS_MT"
 #define XFERBENCH_BACKEND_POSIX "POSIX"
 #define XFERBENCH_BACKEND_GPUNETIO "GPUNETIO"
 #define XFERBENCH_BACKEND_MOONCAKE "Mooncake"
@@ -133,6 +134,7 @@ class xferBenchConfig {
         static bool storage_enable_direct;
         static int gds_batch_pool_size;
         static int gds_batch_limit;
+        static int gds_mt_thread_count;
         static std::string gpunetio_device_list;
 
         static int loadFromFlags();

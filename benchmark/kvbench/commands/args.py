@@ -145,6 +145,21 @@ def nixl_bench_args(func):
         func
     )
     func = click.option(
+        "--gds_batch_pool_size",
+        type=int,
+        help="Size of the GDS batch pool (default: 32)",
+    )(func)
+    func = click.option(
+        "--gds_batch_limit",
+        type=int,
+        help="Limit on the number of batches in the GDS batch pool (default: 128)",
+    )(func)
+    func = click.option(
+        "--gds_mt_thread_count",
+        type=int,
+        help="Number of threads to use for GDS_MT backend (default: 0)",
+    )(func)
+    func = click.option(
         "--device_list", type=str, help="Comma-separated device names (default: all)"
     )(func)
     func = click.option(

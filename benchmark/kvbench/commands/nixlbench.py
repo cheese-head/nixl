@@ -39,6 +39,7 @@ class NIXLBench:
         filepath="",
         gds_batch_pool_size=32,
         gds_batch_limit=128,
+        gds_mt_thread_count=0,
         initiator_seg_type="DRAM",
         enable_vmm=False,
         max_batch_size=None,
@@ -108,6 +109,7 @@ class NIXLBench:
         self.enable_vmm = enable_vmm
         self.gds_batch_pool_size = gds_batch_pool_size
         self.gds_batch_limit = gds_batch_limit
+        self.gds_mt_thread_count = gds_mt_thread_count
         self.initiator_seg_type = initiator_seg_type
         self.max_batch_size = max_batch_size
         self.max_block_size = max_block_size
@@ -145,6 +147,13 @@ class NIXLBench:
         else:
             raise ValueError(f"Invalid source for GDS: {source}")
 
+    def _configure_gds_mt(self, source: str, destination: str):
+        if source == "file":
+            self.op_type = "READ"
+            self.target_seg_type = "VRAM"
+        elif source == "gpu":
+            self.op_type = "WRITE"
+
     def _configure_posix(self, source: str, destination: str):
         if source == "file":
             self.op_type = "READ"
@@ -160,6 +169,8 @@ class NIXLBench:
             self._configure_gds(source, destination)
         elif backend.lower() == "posix":
             self._configure_posix(source, destination)
+        elif backend.lower() == "gds_mt":
+            self._configure_gds_mt(source, destination)
         else:
             raise ValueError(f"Invalid backend: {backend}")
 
