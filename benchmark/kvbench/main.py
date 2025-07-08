@@ -23,13 +23,13 @@ from pathlib import Path
 
 import click
 import numpy as np
-from tabulate import tabulate
 import yaml
 from commands.args import cli_args, common_args, nixl_bench_args, plan_args
 from commands.nixlbench import NIXLBench
 from models.model_config import ModelConfig
 from models.models import BaseModelArch
 from models.utils import get_batch_size, override_yaml_args
+from tabulate import tabulate
 
 
 def parse_size(nbytes: str) -> int:
