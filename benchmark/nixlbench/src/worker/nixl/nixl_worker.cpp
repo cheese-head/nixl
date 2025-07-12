@@ -393,8 +393,8 @@ xferBenchNixlWorker::initBasicDescFile(size_t buffer_size, int fd, int mem_dev_i
         exit(EXIT_FAILURE);
     }
     if (xferBenchConfig::storage_enable_direct) {
-        int rc = posix_memalign(&buf, (int)page_size, buffer_size);
-        if (rc != 0) {
+        int rc = posix_memalign(&buf, page_size, buffer_size);
+        if (rc != 0 || !buf) {
             std::cerr << "Error: " << strerror(rc) << std::endl;
             std::cerr << "Failed to allocate " << buffer_size << " bytes of memory" << std::endl;
             return std::nullopt;
