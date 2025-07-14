@@ -35,8 +35,7 @@
 #include <omp.h>
 
 
-#define ROUND_UP(value, granularity) \
-    ((((value) + (granularity) - 1) / (granularity)) * (granularity))
+#define ROUND_UP(value, granularity) ((((value) + (granularity)-1) / (granularity)) * (granularity))
 
 static uintptr_t gds_running_ptr = 0x0;
 static std::vector<std::vector<xferBenchIOV>> gds_remote_iovs;
@@ -386,7 +385,6 @@ xferBenchNixlWorker::initBasicDescFile(size_t buffer_size, int fd, int mem_dev_i
     auto ret =
         std::optional<xferBenchIOV>(std::in_place, (uintptr_t)gds_running_ptr, buffer_size, fd);
     // Fill up with data
-<<<<<<< HEAD
     void *buf;
     long page_size = sysconf(_SC_PAGESIZE);
     if (page_size == 0) {
@@ -406,12 +404,6 @@ xferBenchNixlWorker::initBasicDescFile(size_t buffer_size, int fd, int mem_dev_i
             std::cerr << "Failed to allocate " << buffer_size << " bytes of memory" << std::endl;
             return std::nullopt;
         }
-=======
-    void *buf = (void *)malloc(buffer_size);
-    if (!buf) {
-        std::cerr << "Failed to allocate " << buffer_size << " bytes of memory" << std::endl;
-        return std::nullopt;
->>>>>>> origin/main
     }
     // File is always initialized with XFERBENCH_TARGET_BUFFER_ELEMENT
     memset(buf, XFERBENCH_TARGET_BUFFER_ELEMENT, buffer_size);
