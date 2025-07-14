@@ -34,8 +34,8 @@
 #include <utils/serdes/serdes.h>
 #include <omp.h>
 
-
-#define ROUND_UP(value, granularity) ((((value) + (granularity)-1) / (granularity)) * (granularity))
+#define ROUND_UP(value, granularity) \
+    ((((value) + (granularity) - 1) / (granularity)) * (granularity))
 
 static uintptr_t gds_running_ptr = 0x0;
 static std::vector<std::vector<xferBenchIOV>> gds_remote_iovs;
