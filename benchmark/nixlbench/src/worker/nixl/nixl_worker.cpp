@@ -215,7 +215,8 @@ enum class AllocationType { POSIX_MEMALIGN, CALLOC, MALLOC };
 static bool
 allocateXferMemory(size_t buffer_size,
                    void **addr,
-                   std::optional<AllocationType> allocation_type = std::nullopt) {
+                   std::optional<AllocationType> allocation_type = std::nullopt,
+                   std::optional<size_t> num = 1) {
 
     if (!addr) {
         std::cerr << "Invalid address" << std::endl;
@@ -240,7 +241,7 @@ allocateXferMemory(size_t buffer_size,
         }
         memset(*addr, 0, buffer_size);
     } else if (type == AllocationType::CALLOC) {
-        *addr = calloc(1, buffer_size);
+        *addr = calloc(num.value_or(1), buffer_size);
         if (!*addr) {
             std::cerr << "Failed to allocate " << buffer_size << " bytes of DRAM memory"
                       << std::endl;
@@ -259,6 +260,7 @@ allocateXferMemory(size_t buffer_size,
     }
     return true;
 }
+
 std::optional<xferBenchIOV>
 xferBenchNixlWorker::initBasicDescDram(size_t buffer_size, int mem_dev_id) {
     void *addr;
