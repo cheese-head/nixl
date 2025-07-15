@@ -214,12 +214,11 @@ xferBenchNixlWorker::initBasicDescDram(size_t buffer_size, int mem_dev_id) {
     void *addr;
 
     if (xferBenchConfig::storage_enable_direct) {
-        long page_size = sysconf(_SC_PAGESIZE);
-        if (page_size == 0) {
+        if (xferBenchConfig::page_size == 0) {
             std::cerr << "Error: Invalid page size returned by sysconf" << std::endl;
             return std::nullopt;
         }
-        int rc = posix_memalign(&addr, page_size, buffer_size);
+        int rc = posix_memalign(&addr, xferBenchConfig::page_size, buffer_size);
         if (rc != 0 || !addr) {
             std::cerr << "Failed to allocate " << buffer_size
                       << " bytes of page-aligned DRAM memory" << std::endl;
@@ -386,13 +385,12 @@ xferBenchNixlWorker::initBasicDescFile(size_t buffer_size, int fd, int mem_dev_i
         std::optional<xferBenchIOV>(std::in_place, (uintptr_t)gds_running_ptr, buffer_size, fd);
     // Fill up with data
     void *buf;
-    long page_size = sysconf(_SC_PAGESIZE);
-    if (page_size == 0) {
+    if (xferBenchConfig::page_size == 0) {
         std::cerr << "Error: Invalid page size returned by sysconf" << std::endl;
         exit(EXIT_FAILURE);
     }
     if (xferBenchConfig::storage_enable_direct) {
-        int rc = posix_memalign(&buf, page_size, buffer_size);
+        int rc = posix_memalign(&buf, xferBenchConfig::page_size, buffer_size);
         if (rc != 0 || !buf) {
             std::cerr << "Error: " << strerror(rc) << std::endl;
             std::cerr << "Failed to allocate " << buffer_size << " bytes of memory" << std::endl;
@@ -408,7 +406,7 @@ xferBenchNixlWorker::initBasicDescFile(size_t buffer_size, int fd, int mem_dev_i
     // File is always initialized with XFERBENCH_TARGET_BUFFER_ELEMENT
     memset(buf, XFERBENCH_TARGET_BUFFER_ELEMENT, buffer_size);
     if (xferBenchConfig::storage_enable_direct) {
-        gds_running_ptr = ((gds_running_ptr + page_size - 1) / page_size) * page_size;
+        gds_running_ptr = ((gds_running_ptr + xferBenchConfig::page_size - 1) / xferBenchConfig::page_size) * xferBenchConfig::page_size;
     } else {
         gds_running_ptr += (buffer_size * mem_dev_id);
     }
@@ -463,12 +461,11 @@ xferBenchNixlWorker::allocateMemory(int num_lists) {
     buffer_size = xferBenchConfig::total_buffer_size / (num_devices * num_lists);
 
     if (xferBenchConfig::storage_enable_direct) {
-        long page_size = sysconf(_SC_PAGESIZE);
-        if (page_size == 0) {
+        if (xferBenchConfig::page_size == 0) {
             std::cerr << "Error: Invalid page size returned by sysconf" << std::endl;
             exit(EXIT_FAILURE);
         }
-        buffer_size = ((buffer_size + page_size - 1) / page_size) * page_size;
+        buffer_size = ((buffer_size + xferBenchConfig::page_size - 1) / xferBenchConfig::page_size) * xferBenchConfig::page_size;
     }
 
     opt_args.backends.push_back(backend_engine);
