@@ -128,6 +128,10 @@ class BaseModelArch(ABC):
                 from models.gpt_oss import GptOss
 
                 modelc = GptOss(**filtered_dict)
+            elif "qwen3" in model_name.lower():
+                from models.qwen3 import Qwen3
+
+                modelc = Qwen3(**filtered_dict)
             else:
                 raise ValueError(f"Model name {model_name} not supported")
 
