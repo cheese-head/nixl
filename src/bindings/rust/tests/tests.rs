@@ -221,7 +221,7 @@ fn test_params_iteration() {
 }
 
 #[test]
-fn test_params_from_iter() {
+fn test_params_try_from_iter() {
     use std::collections::HashMap;
 
     let map = HashMap::from([
@@ -230,7 +230,7 @@ fn test_params_from_iter() {
         ("key3", "value3"),
     ]);
 
-    let params = Params::from_iter(map.iter().map(|(k, v)| (*k, *v)))
+    let params = Params::try_from_iter(map.iter().map(|(k, v)| (*k, *v)))
         .expect("Failed to create params from iterator");
 
     assert!(!params.is_empty().unwrap(), "Params should not be empty");

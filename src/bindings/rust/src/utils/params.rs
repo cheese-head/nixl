@@ -110,9 +110,9 @@ impl Params {
     ///     ("bucket", "my-bucket"),
     /// ]);
     ///
-    /// let params = Params::from_iter(map.iter().map(|(k, v)| (*k, *v)))?;
+    /// let params = Params::try_from_iter(map.iter().map(|(k, v)| (*k, *v)))?;
     /// ```
-    pub fn from_iter<I, K, V>(iter: I) -> Result<Self, NixlError>
+    pub fn try_from_iter<I, K, V>(iter: I) -> Result<Self, NixlError>
     where
         I: IntoIterator<Item = (K, V)>,
         K: AsRef<str>,
@@ -125,7 +125,7 @@ impl Params {
         Ok(params)
     }
 
-    /// Creates a copy of this Params object
+    /// Creates a new Params object by copying from another Params
     ///
     /// # Example
     /// ```ignore
