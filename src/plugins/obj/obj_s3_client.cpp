@@ -208,11 +208,11 @@ awsS3Client::putObjectAsync(std::string_view key,
             const Aws::S3::Model::PutObjectOutcome &outcome,
             const std::shared_ptr<const Aws::Client::AsyncCallerContext> &context) {
             if (outcome.IsSuccess()) {
-                NIXL_DEBUG << absl::StrFormat("S3 PUT SUCCESS: key=%s, size=%zu bytes", key, len);
+                NIXL_DEBUG << absl::StrFormat("PUT SUCCESS: key=%s, size=%zu bytes", key, len);
                 callback(true);
             } else {
                 const auto &error = outcome.GetError();
-                std::string error_msg = absl::StrFormat("S3 PUT FAILED: key=%s, size=%zu bytes\n"
+                std::string error_msg = absl::StrFormat("PUT FAILED: key=%s, size=%zu bytes\n"
                                                         "  Error Code: %d\n"
                                                         "  Error Message: %s\n"
                                                         "  HTTP Status: %d\n"
@@ -257,12 +257,12 @@ awsS3Client::getObjectAsync(std::string_view key,
             const std::shared_ptr<const Aws::Client::AsyncCallerContext> &context) {
             if (outcome.IsSuccess()) {
                 NIXL_DEBUG << absl::StrFormat(
-                    "S3 GET SUCCESS: key=%s, size=%zu bytes, offset=%zu", key, len, off);
+                    "GET SUCCESS: key=%s, size=%zu bytes, offset=%zu", key, len, off);
                 callback(true);
             } else {
                 const auto &error = outcome.GetError();
                 std::string error_msg =
-                    absl::StrFormat("Object GET FAILED: key=%s, size=%zu bytes, offset=%zu\n"
+                    absl::StrFormat("GET FAILED: key=%s, size=%zu bytes, offset=%zu\n"
                                     "  Error Code: %d\n"
                                     "  Error Message: %s\n"
                                     "  HTTP Status: %d\n"
@@ -294,7 +294,7 @@ awsS3Client::checkObjectExists(std::string_view key) {
         return false;
     } else {
         const auto &error = outcome.GetError();
-        NIXL_ERROR << absl::StrFormat("S3 HEAD FAILED: key=%s\n"
+        NIXL_ERROR << absl::StrFormat("HEAD FAILED: key=%s\n"
                                       "  Error Code: %d\n"
                                       "  Error Message: %s\n"
                                       "  HTTP Status: %d",
@@ -341,7 +341,7 @@ awsS3Client::uploadPartAsync(std::string_view key,
             if (outcome.IsSuccess()) {
                 const auto &result = outcome.GetResult();
                 std::string etag = result.GetETag();
-                NIXL_DEBUG << absl::StrFormat("S3 UPLOAD PART SUCCESS: key=%s, upload_id=%s, "
+                NIXL_DEBUG << absl::StrFormat("UPLOAD PART SUCCESS: key=%s, upload_id=%s, "
                                               "part=%d, size=%zu bytes, etag=%s",
                                               key,
                                               upload_id,
@@ -352,7 +352,7 @@ awsS3Client::uploadPartAsync(std::string_view key,
             } else {
                 const auto &error = outcome.GetError();
                 std::string error_msg = absl::StrFormat(
-                    "S3 UPLOAD PART FAILED: key=%s, upload_id=%s, part=%d, size=%zu bytes\n"
+                    "UPLOAD PART FAILED: key=%s, upload_id=%s, part=%d, size=%zu bytes\n"
                     "  Error Code: %d\n"
                     "  Error Message: %s\n"
                     "  HTTP Status: %d\n"
