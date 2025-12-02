@@ -230,7 +230,7 @@ fn test_params_try_from_iter() {
         ("key3", "value3"),
     ]);
 
-    let params = Params::try_from_iter(map.iter().map(|(k, v)| (*k, *v)))
+    let params = Params::from(map.iter().map(|(k, v)| (*k, *v)))
         .expect("Failed to create params from iterator");
 
     assert!(!params.is_empty().unwrap(), "Params should not be empty");
@@ -248,13 +248,13 @@ fn test_params_try_from_iter() {
 }
 
 #[test]
-fn test_params_try_clone() {
+fn test_params_clone() {
     let agent = Agent::new("test_agent").expect("Failed to create agent");
     let (_mems, original_params) = agent
         .get_plugin_params("UCX")
         .expect("Failed to get plugin params");
 
-    let copied_params = original_params.try_clone()
+    let copied_params = original_params.clone()
         .expect("Failed to copy params");
 
     assert_eq!(
@@ -269,12 +269,7 @@ fn test_params_try_clone() {
         original_map.insert(param.key.to_string(), param.value.to_string());
     }
 
-    let mut copied_map = std::collections::HashMap::new();
-    for param in copied_params.iter().unwrap() {
-        let param = param.unwrap();
-        copied_map.insert(param.key.to_string(), param.value.to_string());
-    }
-
+    let mut copied_map = HashMap::from(copied_params.iter().unwrap());
     assert_eq!(original_map, copied_map, "Copied params should match original");
 }
 

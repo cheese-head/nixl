@@ -110,9 +110,9 @@ impl Params {
     ///     ("bucket", "my-bucket"),
     /// ]);
     ///
-    /// let params = Params::try_from_iter(map.iter().map(|(k, v)| (*k, *v)))?;
+    /// let params = Params::from(map.iter().map(|(k, v)| (*k, *v)))?;
     /// ```
-    pub fn try_from_iter<I, K, V>(iter: I) -> Result<Self, NixlError>
+    pub fn from<I, K, V>(iter: I) -> Result<Self, NixlError>
     where
         I: IntoIterator<Item = (K, V)>,
         K: AsRef<str>,
@@ -130,10 +130,10 @@ impl Params {
     /// # Example
     /// ```ignore
     /// let original_params = agent.get_plugin_params("OBJ")?.1;
-    /// let mut modified_params = original_params.try_clone()?;
+    /// let mut modified_params = original_params.clone()?;
     /// modified_params.set("bucket", "my-custom-bucket")?;
     /// ```
-    pub fn try_clone(&self) -> Result<Self, NixlError> {
+    pub fn clone(&self) -> Result<Self, NixlError> {
         let mut params = Self::create()?;
 
         if let Ok(iter) = self.iter() {
