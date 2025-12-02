@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use std::collections::HashMap;
 
 /// A safe wrapper around NIXL parameters
 pub struct Params {
@@ -34,7 +35,7 @@ pub struct ParamIterator<'a> {
 }
 
 impl<'a> Iterator for ParamIterator<'a> {
-    type Item = Result<ParamPair<'a>, NixlError>;
+    type Item = Result<(&'a str, &'a str), NixlError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut key_ptr = ptr::null();
@@ -58,7 +59,7 @@ impl<'a> Iterator for ParamIterator<'a> {
                 let result = unsafe {
                     let key = CStr::from_ptr(key_ptr).to_str().unwrap();
                     let value = CStr::from_ptr(value_ptr).to_str().unwrap();
-                    Ok(ParamPair { key, value })
+                    Ok((key, value))
                 };
                 Some(result)
             }
@@ -74,6 +75,14 @@ impl Drop for ParamIterator<'_> {
         unsafe {
             nixl_capi_params_destroy_iterator(self.iter.as_ptr());
         }
+    }
+}
+
+impl From<ParamIterator<'_>> for HashMap<String, String> {
+    fn from(iter: ParamIterator<'_>) -> Self {
+        iter.filter_map(Result::ok)
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 }
 
@@ -137,9 +146,9 @@ impl Params {
         let mut params = Self::create()?;
 
         if let Ok(iter) = self.iter() {
-            for pair in iter {
-                let pair = pair?;
-                params.set(pair.key, pair.value)?;
+            for result in iter {
+                let (key, value) = result?;
+                params.set(key, value)?;
             }
         }
 
