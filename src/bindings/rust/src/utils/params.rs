@@ -34,6 +34,19 @@ pub struct ParamIterator<'a> {
     _phantom: std::marker::PhantomData<&'a ()>,
 }
 
+/// An infallible iterator over parameter key-value pairs (filters out errors)
+pub struct ParamIntoIter<'a> {
+    inner: ParamIterator<'a>,
+}
+
+impl<'a> Iterator for ParamIntoIter<'a> {
+    type Item = (&'a str, &'a str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.find_map(Result::ok)
+    }
+}
+
 impl<'a> Iterator for ParamIterator<'a> {
     type Item = Result<(&'a str, &'a str), NixlError>;
 
@@ -83,6 +96,17 @@ impl From<ParamIterator<'_>> for HashMap<String, String> {
         iter.filter_map(Result::ok)
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect()
+    }
+}
+
+impl<'a> IntoIterator for &'a Params {
+    type Item = (&'a str, &'a str);
+    type IntoIter = ParamIntoIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ParamIntoIter {
+            inner: self.iter().expect("Failed to create param iterator"),
+        }
     }
 }
 
@@ -143,16 +167,7 @@ impl Params {
     /// modified_params.set("bucket", "my-custom-bucket")?;
     /// ```
     pub fn clone(&self) -> Result<Self, NixlError> {
-        let mut params = Self::create()?;
-
-        if let Ok(iter) = self.iter() {
-            for result in iter {
-                let (key, value) = result?;
-                params.set(key, value)?;
-            }
-        }
-
-        Ok(params)
+        Params::from(self)
     }
 
     /// Sets a key-value pair in the parameters (overwrites if exists)
