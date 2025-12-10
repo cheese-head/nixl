@@ -23,17 +23,6 @@ set -x
 TEXT_YELLOW="\033[1;33m"
 TEXT_CLEAR="\033[0m"
 
-# For running as user - check if running as root, if not set sudo variable
-if [ "$(id -u)" -ne 0 ]; then
-    SUDO=sudo
-else
-    SUDO=""
-fi
-
-$SUDO apt-get update
-$SUDO apt-get -qq install -y libaio-dev
-
-
 # Parse commandline arguments with first argument being the install directory.
 INSTALL_DIR=$1
 
@@ -46,8 +35,6 @@ ARCH=$(uname -m)
 [ "$ARCH" = "arm64" ] && ARCH="aarch64"
 
 export LD_LIBRARY_PATH=${INSTALL_DIR}/lib:${INSTALL_DIR}/lib/$ARCH-linux-gnu:${INSTALL_DIR}/lib/$ARCH-linux-gnu/plugins:/usr/local/lib:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs:/usr/local/cuda-12.8/compat:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/usr/local/cuda/compat/lib.real:$LD_LIBRARY_PATH
 
 export CPATH=${INSTALL_DIR}/include:$CPATH
 export PATH=${INSTALL_DIR}/bin:$PATH
@@ -59,12 +46,37 @@ env
 nvidia-smi topo -m || true
 ibv_devinfo || true
 uname -a || true
+cat /sys/devices/virtual/dmi/id/product_name || true
+
+echo "==== NVIDIA Peermem check ===="
+if ! lsmod | grep -q nvidia_peermem; then
+    echo "nvidia_peermem module not loaded"
+fi
+
+if [ -f /sys/kernel/mm/memory_peers/nv_mem/version ]; then
+    cat /sys/kernel/mm/memory_peers/nv_mem/version
+else
+    echo "/sys/kernel/mm/memory_peers/nv_mem/version not found "
+fi
+
+if [ -f /sys/module/nvidia_peermem/version ]; then
+    cat /sys/module/nvidia_peermem/version
+else
+    echo "/sys/module/nvidia_peermem/version not found"
+fi
+
+if [ -f /sys/module/nv_peer_mem/version ]; then
+    cat /sys/module/nv_peer_mem/version
+else
+    echo "/sys/module/nv_peer_mem/version not found"
+fi
 
 echo "==== Running ETCD server ===="
 etcd_port=$(get_next_tcp_port)
 etcd_peer_port=$(get_next_tcp_port)
 export NIXL_ETCD_ENDPOINTS="http://127.0.0.1:${etcd_port}"
 export NIXL_ETCD_PEER_URLS="http://127.0.0.1:${etcd_peer_port}"
+export NIXL_ETCD_NAMESPACE="/nixl/cpp_ci/${etcd_port}"
 etcd --listen-client-urls ${NIXL_ETCD_ENDPOINTS} --advertise-client-urls ${NIXL_ETCD_ENDPOINTS} \
      --listen-peer-urls ${NIXL_ETCD_PEER_URLS} --initial-advertise-peer-urls ${NIXL_ETCD_PEER_URLS} \
      --initial-cluster default=${NIXL_ETCD_PEER_URLS} &
@@ -75,26 +87,32 @@ cd ${INSTALL_DIR}
 ./bin/desc_example
 ./bin/agent_example
 ./bin/nixl_example
+if $TEST_LIBFABRIC ; then
+    ./bin/nixl_example LIBFABRIC
+fi
 ./bin/nixl_etcd_example
 ./bin/ucx_backend_test
-./bin/ucx_mo_backend_test
 mkdir -p /tmp/telemetry_test
 NIXL_TELEMETRY_ENABLE=y NIXL_TELEMETRY_DIR=/tmp/telemetry_test ./bin/agent_example &
 sleep 1
 ./bin/telemetry_reader /tmp/telemetry_test/Agent001 &
 telePID=$!
 sleep 6
-kill -s SIGINT $telePID
+kill -s INT $telePID
 
 # POSIX test disabled until we solve io_uring and Docker compatibility
 
 ./bin/nixl_posix_test -n 128 -s 1048576
-
+./bin/nixl_gusli_test -n 4 -s 16
 ./bin/ucx_backend_multi
 ./bin/serdes_test
+# TODO: Enable Mooncake test once data corruption issue is resolved
+# if $HAS_GPU ; then
+#     ./bin/mooncake_backend_test
+# fi
 
 # shellcheck disable=SC2154
-./bin/gtest --min-tcp-port="$min_gtest_port" --max-tcp-port="$max_gtest_port"
+gtest-parallel --workers=1 --serialize_test_cases ./bin/gtest -- --min-tcp-port="$min_gtest_port" --max-tcp-port="$max_gtest_port"
 ./bin/test_plugin
 
 # Run NIXL client-server test

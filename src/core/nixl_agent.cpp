@@ -32,7 +32,6 @@
 #include "telemetry_event.h"
 
 constexpr char TELEMETRY_ENABLED_VAR[] = "NIXL_TELEMETRY_ENABLE";
-constexpr char TELEMETRY_DIR_VAR[] = "NIXL_TELEMETRY_DIR";
 static const std::vector<std::vector<std::string>> illegal_plugin_combinations = {
     {"GDS", "GDS_MT"},
 };
@@ -126,19 +125,12 @@ nixlAgentData::nixlAgentData(const std::string &name, const nixlAgentConfig &cfg
 
     memorySection = new nixlLocalSection();
     const char *telemetry_env_val = std::getenv(TELEMETRY_ENABLED_VAR);
-    const char *telemetry_env_dir = std::getenv(TELEMETRY_DIR_VAR);
 
     if (telemetry_env_val != nullptr) {
         if (!strcasecmp(telemetry_env_val, "y") || !strcasecmp(telemetry_env_val, "1") ||
             !strcasecmp(telemetry_env_val, "yes") || !strcasecmp(telemetry_env_val, "on")) {
             telemetryEnabled = true;
-            if (telemetry_env_dir != nullptr) {
-                std::string telemetry_file = std::string(telemetry_env_dir) + "/" + name;
-                telemetry_ = std::make_unique<nixlTelemetry>(telemetry_file, backendEngines);
-                NIXL_DEBUG << "NIXL telemetry is enabled with output file: " << telemetry_file;
-            } else {
-                NIXL_DEBUG << "NIXL telemetry is enabled without an output file";
-            }
+            telemetry_ = std::make_unique<nixlTelemetry>(name, backendEngines);
         } else if (cfg.captureTelemetry) {
             telemetryEnabled = true;
             NIXL_WARN << "NIXL telemetry is enabled through config, "
@@ -168,7 +160,7 @@ nixlAgentData::~nixlAgentData() {
 
     for (auto & elm: backendEngines) {
         auto& plugin_manager = nixlPluginManager::getInstance();
-        auto plugin_handle = plugin_manager.getPlugin(elm.second->getType());
+        auto plugin_handle = plugin_manager.getBackendPlugin(elm.second->getType());
 
         if (plugin_handle) {
             // If we have a plugin handle, use it to destroy the engine
@@ -194,15 +186,29 @@ nixlAgent::nixlAgent(const std::string &name, const nixlAgentConfig &cfg) :
 
     if (data->useEtcd || cfg.useListenThread) {
         data->commThreadStop = false;
-        data->commThread =
-            std::thread(&nixlAgentData::commWorker, data.get(), this);
+        data->agentShutdown = false;
+        data->commThread = std::thread(&nixlAgentData::commWorker, data.get(), std::ref(*this));
     }
 }
 
 nixlAgent::~nixlAgent() {
     if (data && (data->useEtcd || data->config.useListenThread)) {
+        data->agentShutdown = true;
+        while (!data->commQueue.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
         data->commThreadStop = true;
         if(data->commThread.joinable()) data->commThread.join();
+
+        try {
+            if (data->commThreadException_) {
+                std::rethrow_exception(data->commThreadException_);
+            }
+        }
+        catch (const std::exception &e) {
+            NIXL_WARN << "Communication thread has thrown an exception: " << e.what();
+        }
 
         // Close remaining connections from comm thread
         for (auto &[remote, fd] : data->remoteSockets) {
@@ -219,7 +225,7 @@ nixlAgent::~nixlAgent() {
 nixl_status_t
 nixlAgent::getAvailPlugins (std::vector<nixl_backend_t> &plugins) {
     auto& plugin_manager = nixlPluginManager::getInstance();
-    plugins = plugin_manager.getLoadedPluginNames();
+    plugins = plugin_manager.getLoadedBackendPluginNames();
     return NIXL_SUCCESS;
 }
 
@@ -232,7 +238,7 @@ nixlAgent::getPluginParams (const nixl_backend_t &type,
 
     // First try to get options from a loaded plugin
     auto& plugin_manager = nixlPluginManager::getInstance();
-    auto plugin_handle = plugin_manager.getPlugin(type);
+    auto plugin_handle = plugin_manager.getBackendPlugin(type);
 
     if (plugin_handle) {
       // If the plugin is already loaded, get options directly
@@ -242,7 +248,7 @@ nixlAgent::getPluginParams (const nixl_backend_t &type,
     }
 
     // If plugin isn't loaded yet, try to load it temporarily
-    plugin_handle = plugin_manager.loadPlugin(type);
+    plugin_handle = plugin_manager.loadBackendPlugin(type);
     if (plugin_handle) {
         params = plugin_handle->getBackendOptions();
         mems   = plugin_handle->getBackendMems();
@@ -251,7 +257,7 @@ nixlAgent::getPluginParams (const nixl_backend_t &type,
 
         // We don't keep the plugin loaded if we didn't have it before
         if (data->backendEngines.count(type) == 0) {
-            plugin_manager.unloadPlugin(type);
+            plugin_manager.unloadBackendPlugin(type);
         }
         return NIXL_SUCCESS;
     }
@@ -318,7 +324,7 @@ nixlAgent::createBackend(const nixl_backend_t &type,
 
     // First, try to load the backend as a plugin
     auto& plugin_manager = nixlPluginManager::getInstance();
-    auto plugin_handle = plugin_manager.loadPlugin(type);
+    auto plugin_handle = plugin_manager.loadBackendPlugin(type);
 
     if (plugin_handle) {
         // Plugin found, use it to create the backend
@@ -1278,12 +1284,22 @@ nixlAgent::prepGpuSignal(const nixl_reg_dlist_t &signal_descs,
 
     NIXL_SHARED_LOCK_GUARD(data->lock);
 
+    nixlBackendH *backend = extra_params->backends[0];
+
+    // Get the size of individual GPU signals
+    size_t signal_size;
+    nixl_status_t ret = backend->engine->getGpuSignalSize(signal_size);
+    if (ret != NIXL_SUCCESS) {
+        NIXL_ERROR_FUNC << "failed to get GPU signal size with status: "
+                        << nixlEnumStrings::statusStr(ret);
+        return ret;
+    }
+
     // Convert reg_dlist to xfer_dlist for populate call
     nixl_xfer_dlist_t xfer_descs = signal_descs.trim();
 
-    nixlBackendH *backend = extra_params->backends[0];
     nixl_meta_dlist_t result(signal_descs.getType());
-    nixl_status_t ret = data->memorySection->populate(xfer_descs, backend->engine, result);
+    ret = data->memorySection->populate(xfer_descs, backend->engine, result);
 
     if (ret != NIXL_SUCCESS) {
         NIXL_ERROR_FUNC << "failed to populate signal metadata with specified backend";
@@ -1291,19 +1307,33 @@ nixlAgent::prepGpuSignal(const nixl_reg_dlist_t &signal_descs,
     }
 
     for (size_t i = 0; i < static_cast<size_t>(result.descCount()); i++) {
-        void *signal = reinterpret_cast<void *>(result[i].addr);
-        ret = backend->engine->prepGpuSignal(*result[i].metadataP, signal);
+        size_t desc_len = result[i].len;
+        uintptr_t desc_addr = result[i].addr;
 
-        if (ret != NIXL_SUCCESS) {
-            NIXL_ERROR_FUNC << "failed to prepare GPU signal " << i
-                            << " with status: " << nixlEnumStrings::statusStr(ret);
-            return ret;
+        size_t num_signals = desc_len / signal_size;
+
+        if (num_signals == 0) {
+            NIXL_ERROR_FUNC << "descriptor " << i << " is too small (length=" << desc_len
+                            << ") to contain even one signal (signal_size=" << signal_size << ")";
+            return NIXL_ERR_INVALID_PARAM;
         }
 
-        NIXL_DEBUG << "Successfully prepared GPU signal " << i << " at address " << signal;
+        for (size_t j = 0; j < num_signals; j++) {
+            void *signal = reinterpret_cast<void *>(desc_addr + j * signal_size);
+            ret = backend->engine->prepGpuSignal(*result[i].metadataP, signal);
+
+            if (ret != NIXL_SUCCESS) {
+                NIXL_ERROR_FUNC << "failed to prepare GPU signal " << j << " in descriptor " << i
+                                << " with status: " << nixlEnumStrings::statusStr(ret);
+                return ret;
+            }
+
+            NIXL_DEBUG << "Successfully prepared GPU signal " << j << " in descriptor " << i
+                       << " at address " << signal;
+        }
     }
 
-    NIXL_DEBUG << "Successfully prepared " << result.descCount() << " GPU signals";
+    NIXL_DEBUG << "Successfully prepared GPU signals for " << result.descCount() << " descriptors";
     return NIXL_SUCCESS;
 }
 

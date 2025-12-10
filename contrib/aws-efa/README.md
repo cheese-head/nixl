@@ -13,6 +13,30 @@ The AWS test infrastructure allows NIXL to be automatically tested on AWS Elasti
 - Pre-configured AWS EKS cluster: `ucx-ci`
 - Properly registered job definition: `NIXL-Ubuntu-JD`
 
+### EFA-Enabled Security Group Requirements
+
+EFA requires security groups with self-referencing rules. Verify your setup:
+
+```bash
+# Get cluster security group
+CLUSTER_SG=$(aws eks describe-cluster --name ucx-ci --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' --output text)
+
+# Verify self-referencing inbound rule (all traffic)
+aws ec2 describe-security-groups --group-ids $CLUSTER_SG \
+  --query 'SecurityGroups[0].IpPermissions[].UserIdGroupPairs[?GroupId==`'$CLUSTER_SG'`].GroupId'
+
+# Verify SSH access (port 22)
+aws ec2 describe-security-groups --group-ids $CLUSTER_SG \
+  --query 'SecurityGroups[0].IpPermissions[?FromPort==`22`]' --output json
+
+# Verify self-referencing outbound rule (all traffic)
+aws ec2 describe-security-groups --group-ids $CLUSTER_SG \
+  --query 'SecurityGroups[0].IpPermissionsEgress[].UserIdGroupPairs[?GroupId==`'$CLUSTER_SG'`].GroupId'
+```
+
+**Required rules:** Inbound/outbound all traffic from/to same security group + SSH access.
+**Reference:** https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start.html#efa-start-security
+
 ## Files
 
 - **aws_test.sh**: Main script that submits and monitors AWS Batch jobs
@@ -65,7 +89,7 @@ The AWS test script:
 
 ## Container Image
 
-The script uses the container image: `nvcr.io/nvidia/pytorch:25.02-py3`
+The script uses the container image: `nvcr.io/nvidia/cuda-dl-base:25.06-cuda12.9-devel-ubuntu24.04`
 You can override this by setting the `CONTAINER_IMAGE` environment variable:
 
 ```bash

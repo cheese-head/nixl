@@ -9,7 +9,6 @@
 - job-template:
     name: "{jjb_proj}-dispatcher"  # Will be expanded to 'nixl-ci-dispatcher'
     project-type: pipeline
-    folder: "{jjb_folder}"
     properties:
         # GitHub integration settings
         - github:
@@ -52,43 +51,48 @@
         @Library('blossom-github-lib@master')  // Use custom GitHub library
         import ipp.blossom.*
         // Authenticate with GitHub using stored credentials
-        withCredentials([usernamePassword(credentialsId: 'github-token', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {{
+        withCredentials([usernamePassword(credentialsId: 'svc-nixl-github-token', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {{
           githubHelper = GithubHelper.getInstance("${{GIT_PASSWORD}}", VARIABLE_FROM_POST)
         }}
         // Update GitHub commit status
-        githubHelper.updateCommitStatus("$BUILD_URL", "CI Dispatcher started", GitHubCommitState.PENDING)
+        def blueOceanUrl = "${{JENKINS_URL}}blue/organizations/jenkins/nixl-ci-dispatcher/detail/nixl-ci-dispatcher/${{BUILD_NUMBER}}/pipeline/"
+        githubHelper.updateCommitStatus(blueOceanUrl, "NIXL CI Started", GitHubCommitState.PENDING)
         currentBuild.description = githubHelper.getBuildDescription()
         try {{
             // Trigger the actual build and test jobs in parallel
             parallel build: {{
-                def build = build job: 'nixl-ci-build', parameters: [
+                def buildJob = 'nixl-ci-build'
+                def run = build job: buildJob, parameters: [
                     string(name: 'sha1', value: githubHelper.getMergedSHA()),
                     string(name: 'githubData', value: VARIABLE_FROM_POST)
                 ], propagate: false
-                currentBuild.description += "<br>Job: <a href='${{build.absoluteUrl}}'>nixl-ci-build</a> Result: <b style='color:${{build.result == 'SUCCESS' ? 'green' : 'red'}}'>${{build.result}}</b>"
-                if (!build.resultIsBetterOrEqualTo('SUCCESS')) {{
-                  currentBuild.result = build.result
-                  error("Build CI failed")
+                def jobUrl = "${{JENKINS_URL}}blue/organizations/jenkins/${{buildJob}}/detail/${{buildJob}}/${{run.number}}/pipeline"
+                if (run.resultIsBetterOrEqualTo('SUCCESS')) {{
+                    echo "${{buildJob}} SUCCESS: ${{jobUrl}}"
+                }} else {{
+                    error("${{buildJob}} FAILED: ${{jobUrl}}")
                 }}
             }}, test: {{
-                def build = build job: 'nixl-ci-test', parameters: [
+                def buildJob = 'nixl-ci-test'
+                def run = build job: buildJob, parameters: [
                     string(name: 'sha1', value: githubHelper.getMergedSHA()),
                     string(name: 'githubData', value: VARIABLE_FROM_POST)
                 ], propagate: false
-                currentBuild.description += "<br>Job: <a href='${{build.absoluteUrl}}'>nixl-ci-test</a> Result: <b style='color:${{build.result == 'SUCCESS' ? 'green' : 'red'}}'>${{build.result}}</b>"
-                if (!build.resultIsBetterOrEqualTo('SUCCESS')) {{
-                  currentBuild.result = build.result
-                  error("Test CI failed")
+                def jobUrl = "${{JENKINS_URL}}blue/organizations/jenkins/${{buildJob}}/detail/${{buildJob}}/${{run.number}}/pipeline"
+                if (run.resultIsBetterOrEqualTo('SUCCESS')) {{
+                    echo "${{buildJob}} SUCCESS: ${{jobUrl}}"
+                }} else {{
+                    error("${{buildJob}} FAILED: ${{jobUrl}}")
                 }}
             }},
             failFast: false  // Continue even if some parallel jobs fail
 
-            githubHelper.updateCommitStatus("$BUILD_URL", "CI Dispatcher successeded", GitHubCommitState.SUCCESS)
+            githubHelper.updateCommitStatus(blueOceanUrl, "NIXL CI Succeeded", GitHubCommitState.SUCCESS)
         }} catch(Exception ex) {{
             // Handle build failures
             currentBuild.result = 'FAILURE'
             println ex
-            githubHelper.updateCommitStatus("$BUILD_URL", "CI Dispatcher failed", GitHubCommitState.FAILURE)
+            githubHelper.updateCommitStatus(blueOceanUrl, "NIXL CI Failed", GitHubCommitState.FAILURE)
             error("failed")
         }}
 
@@ -96,7 +100,6 @@
 - job-template:
     name: "{jjb_proj}-build"      # Will be expanded to 'nixl-ci-build'
     project-type: pipeline
-    folder: "{jjb_folder}"
     disabled: false
     properties:
         # Similar properties as dispatcher job
@@ -139,7 +142,7 @@
         scm:
             - git:
                 url: "{jjb_git}"
-                credentials-id: 'swx-jenkins_ssh_key'
+                credentials-id: 'svc-nixl-ssh_key'
                 branches: ['$sha1']
                 shallow-clone: false
                 do-not-fetch-tags: false
@@ -159,7 +162,6 @@
 - job-template:
     name: "{jjb_proj}-test"      # Will be expanded to 'nixl-ci-test'
     project-type: pipeline
-    folder: "{jjb_folder}"
     disabled: false
     properties:
         # Similar properties as dispatcher job
@@ -202,7 +204,7 @@
         scm:
             - git:
                 url: "{jjb_git}"
-                credentials-id: 'swx-jenkins_ssh_key'
+                credentials-id: 'svc-nixl-ssh_key'
                 branches: ['$sha1']
                 shallow-clone: false
                 do-not-fetch-tags: false
@@ -224,7 +226,6 @@
 - job-template:
     name: "{jjb_proj}-build-container"
     project-type: pipeline
-    folder: "{jjb_folder}"
     disabled: false
     properties:
       - build-discarder:
@@ -240,7 +241,8 @@
       • Builds and pushes x86_64 &amp; aarch64 images with any NIXL/UCX version combination<br/>
       • Choose between <b>nixlbench</b> or <b>nixl</b> build targets<br/>
       • Optional latest tag update via <code>UPDATE_LATEST</code> parameter<br/>
-      • Images pushed to: <code>verification/nixlbench/</code> or <code>verification/nixl/</code> based on target<br/>
+      • Images pushed to: https://artifactory.nvidia.com/sw-nbu-swx-nixl-docker-local/ <code>verification/nixlbench/</code> or <code>verification/nixl/</code> based on target<br/>
+      • You must be part of access-artifactory-nbu-swx-nixl-users DL group in order to work with these images
       <br/>
       <i>Do NOT edit this job through the Jenkins GUI &mdash; managed by Jenkins Job Builder.</i>
     concurrent: true
@@ -267,18 +269,18 @@
       - string:
           name: "NIXL_VERSION"
           default: "{jjb_branch}"
-          description: "NIXL version to use (tag like 0.6.0, branch name, or commit hash)"
+          description: "NIXL version to use (tag like 0.8.0, branch name, or commit hash)"
       - string:
           name: "UCX_VERSION"
-          default: "v1.19.0"
-          description: "UCX version to use (tag like v1.19.0, branch name, or commit hash)"
+          default: "v1.20.x"
+          description: "UCX version to use (tag like v1.20.x, branch name, or commit hash)"
       - string:
           name: "BASE_IMAGE"
           default: "nvcr.io/nvidia/cuda-dl-base"
           description: "Base Docker image for the container build"
       - string:
           name: "BASE_IMAGE_TAG"
-          default: "25.03-cuda12.8-devel-ubuntu24.04"
+          default: "25.10-cuda13.0-devel-ubuntu24.04"
           description: "Tag for the base Docker image"
       - string:
           name: "TAG_SUFFIX"
@@ -292,7 +294,7 @@
           description: >
             Update the latest tag for this architecture.<br/>
             When enabled, also creates: <code>&lt;base-image-tag&gt;-&lt;arch&gt;-latest</code><br/>
-            Example: <code>25.03-cuda12.8-devel-ubuntu24.04-aarch64-latest</code><br/>
+            Example: <code>25.10-cuda13.0-devel-ubuntu24.04-aarch64-latest</code><br/>
       - string:
           name: "MAIL_TO"
           default: "25f58ae0.NVIDIA.onmicrosoft.com@amer.teams.ms"
@@ -302,7 +304,7 @@
       scm:
         - git:
             url: "{jjb_git}"
-            credentials-id: "swx-jenkins_ssh_key"
+            credentials-id: "svc-nixl-ssh_key"
             branches: ['$NIXL_VERSION']
             shallow-clone: false
             do-not-fetch-tags: false
@@ -323,7 +325,6 @@
     jjb_proj: 'nixl-ci'           # Project prefix for job names
     jjb_git: 'git@github.com:ai-dynamo/nixl.git'  # Repository URL
     jjb_jenkinsfile: '.ci/jenkins/pipeline/Jenkinsfile'  # Main pipeline definition
-    jjb_folder: 'NIXL'
     jjb_branch: 'main'            # Default branch
     jjb_gh_url: 'https://github.com/ai-dynamo/nixl'  # GitHub web URL
     jobs:

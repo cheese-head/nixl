@@ -72,7 +72,7 @@ def nixl_bench_args(func):
     func = click.option(
         "--backend",
         type=str,
-        help="Communication backend [UCX, UCX_MO, GDS, GDS_MT, POSIX, GPUNETIO, Mooncake, HF3FS, OBJ] (default: UCX)",
+        help="Communication backend [UCX, GDS, GDS_MT, POSIX, GPUNETIO, Mooncake, HF3FS, OBJ] (default: UCX)",
     )(func)
     func = click.option(
         "--worker_type",
@@ -170,7 +170,7 @@ def nixl_bench_args(func):
     func = click.option(
         "--posix_api_type",
         type=str,
-        help="API type for POSIX operations [AIO, URING] (only used with POSIX backend",
+        help="API type for POSIX operations [AIO, URING, POSIXAIO] (only used with POSIX backend",
     )(func)
     func = click.option(
         "--enable_vmm",
@@ -213,6 +213,11 @@ def nixl_bench_args(func):
         "--gpunetio_device_list",
         type=str,
         help="Comma-separated GPU CUDA device id to use for communication (only used with GPUNETIO backend)",
+    )(func)
+    func = click.option(
+        "--gpunetio_oob_list",
+        type=str,
+        help="OOB network interface name for control path (only used with GPUNETIO backend)",
     )(func)
     func = click.option(
         "--hf3fs_iopool_size",
@@ -263,6 +268,11 @@ def nixl_bench_args(func):
         "--obj_req_checksum",
         type=str,
         help="Required checksum type for S3 backend [supported, required] (only used with OBJ backend)",
+    )(func)
+    func = click.option(
+        "--obj_ca_bundle",
+        type=str,
+        help="Path to CA bundle for S3 backend (only used with OBJ backend)",
     )(func)
     return func
 

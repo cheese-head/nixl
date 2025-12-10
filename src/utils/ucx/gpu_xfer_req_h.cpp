@@ -21,6 +21,11 @@
 #include "rkey.h"
 #include "config.h"
 
+#include <chrono>
+#include <cstdlib>
+#include <string_view>
+#include <thread>
+
 extern "C" {
 #ifdef HAVE_UCX_GPU_DEVICE_API
 #include <ucp/api/device/ucp_host.h>
@@ -31,21 +36,48 @@ namespace nixl::ucx {
 
 #ifdef HAVE_UCX_GPU_DEVICE_API
 
+namespace {
+
+    [[nodiscard]] std::chrono::milliseconds
+    get_gpu_xfer_timeout() noexcept {
+        constexpr int default_timeout_ms = 5000;
+        constexpr std::string_view timeout_env_name = "NIXL_UCX_GPU_XFER_TIMEOUT_MS";
+
+        const char *timeout_env = std::getenv(timeout_env_name.data());
+        if (!timeout_env) {
+            return std::chrono::milliseconds(default_timeout_ms);
+        }
+
+        const int timeout_ms = std::atoi(timeout_env);
+        if (timeout_ms <= 0) {
+            NIXL_WARN << "Invalid " << timeout_env_name << " value: " << timeout_env
+                      << ", using default " << default_timeout_ms << " ms";
+            return std::chrono::milliseconds(default_timeout_ms);
+        }
+
+        return std::chrono::milliseconds(timeout_ms);
+    }
+
+} // namespace
+
 nixlGpuXferReqH
 createGpuXferReq(const nixlUcxEp &ep,
+                 nixlUcxWorker &worker,
                  const std::vector<nixlUcxMem> &local_mems,
-                 const std::vector<const nixl::ucx::rkey *> &remote_rkeys) {
+                 const std::vector<const nixl::ucx::rkey *> &remote_rkeys,
+                 const std::vector<uint64_t> &remote_addrs) {
     nixl_status_t status = ep.checkTxState();
     if (status != NIXL_SUCCESS) {
         throw std::runtime_error("Endpoint not in valid state for creating memory list");
     }
 
-    if (local_mems.empty() || remote_rkeys.empty()) {
-        throw std::invalid_argument("Empty memh or rkey lists provided");
+    if (local_mems.empty() || remote_rkeys.empty() || remote_addrs.empty()) {
+        throw std::invalid_argument("Empty memory, rkey, or address lists provided");
     }
 
-    if (local_mems.size() != remote_rkeys.size()) {
-        throw std::invalid_argument("Local memh and remote rkey lists must have same size");
+    if (local_mems.size() != remote_rkeys.size() || local_mems.size() != remote_addrs.size()) {
+        throw std::invalid_argument(
+            "Local memory, remote rkey, and remote address lists must have same size");
     }
 
     std::vector<ucp_device_mem_list_elem_t> ucp_elements;
@@ -53,10 +85,14 @@ createGpuXferReq(const nixlUcxEp &ep,
 
     for (size_t i = 0; i < local_mems.size(); i++) {
         ucp_device_mem_list_elem_t ucp_elem;
-        ucp_elem.field_mask =
-            UCP_DEVICE_MEM_LIST_ELEM_FIELD_MEMH | UCP_DEVICE_MEM_LIST_ELEM_FIELD_RKEY;
+        ucp_elem.field_mask = UCP_DEVICE_MEM_LIST_ELEM_FIELD_MEMH |
+            UCP_DEVICE_MEM_LIST_ELEM_FIELD_RKEY | UCP_DEVICE_MEM_LIST_ELEM_FIELD_LOCAL_ADDR |
+            UCP_DEVICE_MEM_LIST_ELEM_FIELD_REMOTE_ADDR | UCP_DEVICE_MEM_LIST_ELEM_FIELD_LENGTH;
         ucp_elem.memh = local_mems[i].getMemh();
         ucp_elem.rkey = remote_rkeys[i]->get();
+        ucp_elem.local_addr = local_mems[i].getBase();
+        ucp_elem.remote_addr = remote_addrs[i];
+        ucp_elem.length = local_mems[i].getSize();
         ucp_elements.push_back(ucp_elem);
     }
 
@@ -68,14 +104,32 @@ createGpuXferReq(const nixlUcxEp &ep,
     params.element_size = sizeof(ucp_device_mem_list_elem_t);
     params.num_elements = ucp_elements.size();
 
+    const auto timeout = get_gpu_xfer_timeout();
+
     ucp_device_mem_list_handle_h ucx_handle;
-    ucs_status_t ucs_status = ucp_device_mem_list_create(ep.getEp(), &params, &ucx_handle);
+    ucs_status_t ucs_status;
+    const auto start = std::chrono::steady_clock::now();
+    bool timeout_warned = false;
+    while ((ucs_status = ucp_device_mem_list_create(ep.getEp(), &params, &ucx_handle)) ==
+           UCS_ERR_NOT_CONNECTED) {
+        if (!timeout_warned && std::chrono::steady_clock::now() - start > timeout) {
+            NIXL_WARN << "Timeout on creating device memory list has been exceeded (timeout="
+                      << timeout.count() << " ms)";
+            timeout_warned = true;
+        }
+
+        if (worker.progress() == 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
     if (ucs_status != UCS_OK) {
         throw std::runtime_error(std::string("Failed to create device memory list: ") +
                                  ucs_status_string(ucs_status));
     }
 
-    NIXL_DEBUG << "Created device memory list handle with " << local_mems.size() << " elements";
+    NIXL_DEBUG << "Created device memory list: ep=" << ep.getEp() << " handle=" << ucx_handle
+               << " num_elements=" << local_mems.size() << " worker=" << &worker;
     return reinterpret_cast<nixlGpuXferReqH>(ucx_handle);
 }
 
@@ -89,8 +143,10 @@ releaseGpuXferReq(nixlGpuXferReqH gpu_req) noexcept {
 
 nixlGpuXferReqH
 createGpuXferReq(const nixlUcxEp &ep,
+                 nixlUcxWorker &worker,
                  const std::vector<nixlUcxMem> &local_mems,
-                 const std::vector<const nixl::ucx::rkey *> &remote_rkeys) {
+                 const std::vector<const nixl::ucx::rkey *> &remote_rkeys,
+                 const std::vector<uint64_t> &remote_addrs) {
     NIXL_ERROR << "UCX GPU device API not supported";
     throw std::runtime_error("UCX GPU device API not available");
 }
