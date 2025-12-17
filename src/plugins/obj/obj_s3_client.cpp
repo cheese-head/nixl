@@ -16,6 +16,7 @@
  */
 
 #include "obj_s3_client.h"
+#include "common/nixl_log.h"
 #include <optional>
 #include <string>
 #include <stdexcept>
@@ -184,6 +185,11 @@ awsS3Client::putObjectAsync(std::string_view key,
                             put_object_callback_t callback) {
     // AWS S3 doesn't support partial put operations with offset
     if (offset != 0) {
+        NIXL_ERROR << "Object plugin S3 PUT FAILED:"
+                   << " bucket=" << bucketName_
+                   << ", key=" << key
+                   << ", reason=offset != 0 not supported (offset=" << offset << ")"
+                   << ". S3 does not support partial object writes.";
         callback(false);
         return;
     }
@@ -199,11 +205,22 @@ awsS3Client::putObjectAsync(std::string_view key,
 
     s3Client_->PutObjectAsync(
         request,
-        [callback, preallocated_stream_buf, data_stream](
+        [callback, preallocated_stream_buf, data_stream,
+         key_str = std::string(key), bucket_str = std::string(bucketName_)](
             const Aws::S3::S3Client *client,
             const Aws::S3::Model::PutObjectRequest &req,
             const Aws::S3::Model::PutObjectOutcome &outcome,
             const std::shared_ptr<const Aws::Client::AsyncCallerContext> &context) {
+            if (!outcome.IsSuccess()) {
+                const auto &error = outcome.GetError();
+                NIXL_ERROR << "Object plugin S3 PUT FAILED:"
+                           << " bucket=" << bucket_str
+                           << ", key=" << key_str
+                           << ", error_type=" << static_cast<int>(error.GetErrorType())
+                           << ", http_code=" << static_cast<int>(error.GetResponseCode())
+                           << ", message=" << error.GetMessage()
+                           << ", exception=" << error.GetExceptionName();
+            }
             callback(outcome.IsSuccess());
         },
         nullptr);
@@ -230,11 +247,23 @@ awsS3Client::getObjectAsync(std::string_view key,
 
     s3Client_->GetObjectAsync(
         request,
-        [callback,
-         stream_factory](const Aws::S3::S3Client *client,
-                         const Aws::S3::Model::GetObjectRequest &req,
-                         const Aws::S3::Model::GetObjectOutcome &outcome,
-                         const std::shared_ptr<const Aws::Client::AsyncCallerContext> &context) {
+        [callback, stream_factory,
+         key_str = std::string(key), bucket_str = std::string(bucketName_), data_len, offset](
+            const Aws::S3::S3Client *client,
+            const Aws::S3::Model::GetObjectRequest &req,
+            const Aws::S3::Model::GetObjectOutcome &outcome,
+            const std::shared_ptr<const Aws::Client::AsyncCallerContext> &context) {
+            if (!outcome.IsSuccess()) {
+                const auto &error = outcome.GetError();
+                NIXL_ERROR << "Object plugin S3 GET FAILED:"
+                           << " bucket=" << bucket_str
+                           << ", key=" << key_str
+                           << ", range=bytes=" << offset << "-" << (offset + data_len - 1)
+                           << ", error_type=" << static_cast<int>(error.GetErrorType())
+                           << ", http_code=" << static_cast<int>(error.GetResponseCode())
+                           << ", message=" << error.GetMessage()
+                           << ", exception=" << error.GetExceptionName();
+            }
             callback(outcome.IsSuccess());
         },
         nullptr);
@@ -250,7 +279,16 @@ awsS3Client::checkObjectExists(std::string_view key) {
         return true;
     else if (outcome.GetError().GetResponseCode() == Aws::Http::HttpResponseCode::NOT_FOUND)
         return false;
-    else
+    else {
+        const auto &error = outcome.GetError();
+        NIXL_ERROR << "Object plugin S3 HEAD FAILED:"
+                   << " bucket=" << bucketName_
+                   << ", key=" << key
+                   << ", error_type=" << static_cast<int>(error.GetErrorType())
+                   << ", http_code=" << static_cast<int>(error.GetResponseCode())
+                   << ", message=" << error.GetMessage()
+                   << ", exception=" << error.GetExceptionName();
         throw std::runtime_error("Failed to check if object exists: " +
-                                 outcome.GetError().GetMessage());
+                                 error.GetMessage());
+    }
 }

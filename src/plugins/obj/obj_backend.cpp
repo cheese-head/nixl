@@ -73,6 +73,9 @@ public:
     ~nixlObjBackendReqH() = default;
 
     std::vector<std::future<nixl_status_t>> statusFutures_;
+    size_t totalTransfers_ = 0;
+    size_t completedTransfers_ = 0;
+    size_t failedTransfers_ = 0;
 
     nixl_status_t
     getOverallStatus() {
@@ -80,7 +83,14 @@ public:
             if (statusFutures_.back().wait_for(std::chrono::seconds(0)) ==
                 std::future_status::ready) {
                 auto current_status = statusFutures_.back().get();
+                completedTransfers_++;
                 if (current_status != NIXL_SUCCESS) {
+                    failedTransfers_++;
+                    NIXL_ERROR << "Object plugin: Transfer failed (completed="
+                               << completedTransfers_ << "/" << totalTransfers_
+                               << ", failed=" << failedTransfers_
+                               << ", status=" << current_status
+                               << "). Check S3/object storage errors above for details.";
                     statusFutures_.clear();
                     return current_status;
                 }
@@ -208,14 +218,24 @@ nixlObjEngine::postXfer(const nixl_xfer_op_t &operation,
                         const nixl_opt_b_args_t *opt_args) const {
     nixlObjBackendReqH *req_h = static_cast<nixlObjBackendReqH *>(handle);
 
-    for (int i = 0; i < local.descCount(); ++i) {
+    const char *op_name = (operation == NIXL_WRITE) ? "WRITE" : "READ";
+    int desc_count = local.descCount();
+    req_h->totalTransfers_ = desc_count;
+    req_h->completedTransfers_ = 0;
+    req_h->failedTransfers_ = 0;
+
+    NIXL_DEBUG << "Object plugin: Starting " << op_name << " operation with "
+               << desc_count << " descriptors";
+
+    for (int i = 0; i < desc_count; ++i) {
         const auto &local_desc = local[i];
         const auto &remote_desc = remote[i];
 
         auto obj_key_search = devIdToObjKey_.find(remote_desc.devId);
         if (obj_key_search == devIdToObjKey_.end()) {
-            NIXL_ERROR << "The object segment key " << remote_desc.devId
-                       << " is not registered with the backend";
+            NIXL_ERROR << "Object plugin: The object segment key " << remote_desc.devId
+                       << " is not registered with the backend (descriptor " << i
+                       << "/" << desc_count << ")";
             return NIXL_ERR_INVALID_PARAM;
         }
 
@@ -225,17 +245,28 @@ nixlObjEngine::postXfer(const nixl_xfer_op_t &operation,
         uintptr_t data_ptr = local_desc.addr;
         size_t data_len = local_desc.len;
         size_t offset = remote_desc.addr;
+        std::string obj_key = obj_key_search->second;
 
         // S3 client interface signals completion via a callback, but NIXL API polls request handle
         // for the status code. Use future/promise pair to bridge the gap.
         if (operation == NIXL_WRITE)
             s3Client_->putObjectAsync(
-                obj_key_search->second, data_ptr, data_len, offset, [status_promise](bool success) {
+                obj_key, data_ptr, data_len, offset,
+                [status_promise, obj_key, i, desc_count](bool success) {
+                    if (!success) {
+                        NIXL_ERROR << "Object plugin: PUT callback failed for key=" << obj_key
+                                   << " (descriptor " << i << "/" << desc_count << ")";
+                    }
                     status_promise->set_value(success ? NIXL_SUCCESS : NIXL_ERR_BACKEND);
                 });
         else
             s3Client_->getObjectAsync(
-                obj_key_search->second, data_ptr, data_len, offset, [status_promise](bool success) {
+                obj_key, data_ptr, data_len, offset,
+                [status_promise, obj_key, i, desc_count](bool success) {
+                    if (!success) {
+                        NIXL_ERROR << "Object plugin: GET callback failed for key=" << obj_key
+                                   << " (descriptor " << i << "/" << desc_count << ")";
+                    }
                     status_promise->set_value(success ? NIXL_SUCCESS : NIXL_ERR_BACKEND);
                 });
     }
